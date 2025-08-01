@@ -14,10 +14,17 @@ export async function GET(request) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
-    // Build customer query
+    // Build customer query with comprehensive search
     let customerQuery = {};
     if (customerName) {
-      customerQuery.name = { $regex: customerName, $options: 'i' };
+      // Search across multiple fields for better results
+      customerQuery.$or = [
+        { name: { $regex: customerName, $options: 'i' } },
+        { phone: { $regex: customerName, $options: 'i' } },
+        { email: { $regex: customerName, $options: 'i' } },
+        { address: { $regex: customerName, $options: 'i' } },
+        { trNumber: { $regex: customerName, $options: 'i' } }
+      ];
     }
 
     // Get all customers
@@ -60,21 +67,43 @@ export async function GET(request) {
           const totalRefills = cylinderTransactions.filter(t => t.type === 'refill').length;
           const totalReturns = cylinderTransactions.filter(t => t.type === 'return').length;
 
-          // Determine overall status based on balance and recent transactions
+          // Determine overall status based on balance, transactions, and individual transaction statuses
           const balance = customer.balance || 0;
           const hasRecentTransactions = [...sales, ...cylinderTransactions].some(
             t => new Date(t.createdAt) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // 30 days
           );
 
+          // Check transaction statuses for more accurate status determination
+          const pendingTransactions = cylinderTransactions.filter(t => t.status === 'pending').length;
+          const clearedTransactions = cylinderTransactions.filter(t => t.status === 'cleared').length;
+          const overdueTransactions = cylinderTransactions.filter(t => t.status === 'overdue').length;
+          
+          // Determine overall status with improved logic
           let overallStatus = 'cleared';
-          if (balance > 0) {
-            overallStatus = 'pending';
-          } else if (balance < 0) {
+          
+          // Priority: overdue > pending > cleared
+          if (overdueTransactions > 0 || balance < -100) { // Significant negative balance
             overallStatus = 'overdue';
+          } else if (pendingTransactions > 0 || balance > 0) {
+            overallStatus = 'pending';
+          } else if (clearedTransactions > 0 || balance === 0) {
+            overallStatus = 'cleared';
           }
 
-          // Filter by status if provided
-          if (status && status !== 'all' && overallStatus !== status) {
+          // Improved status filtering - check if customer has any matching transactions
+          let shouldInclude = true;
+          if (status && status !== 'all') {
+            // Check if customer matches the status filter in multiple ways:
+            // 1. Overall customer status matches
+            // 2. Has transactions with the requested status
+            // 3. Has sales/transactions that could be relevant to the status
+            const hasMatchingTransactionStatus = cylinderTransactions.some(t => t.status === status);
+            const matchesOverallStatus = overallStatus === status;
+            
+            shouldInclude = matchesOverallStatus || hasMatchingTransactionStatus;
+          }
+
+          if (!shouldInclude) {
             return null;
           }
 
@@ -144,10 +173,18 @@ export async function GET(request) {
     // Filter out null results (customers that didn't match status filter)
     const filteredData = customerLedgerData.filter(customer => customer !== null);
 
+    console.log(`Ledger API: Found ${customers.length} customers, filtered to ${filteredData.length} results`);
+    console.log(`Filters applied: customerName=${customerName}, status=${status}, startDate=${startDate}, endDate=${endDate}`);
+
     return NextResponse.json({
       success: true,
       data: filteredData,
       total: filteredData.length,
+      debug: {
+        totalCustomers: customers.length,
+        filteredResults: filteredData.length,
+        appliedFilters: { customerName, status, startDate, endDate }
+      },
       filters: {
         customerName,
         status,

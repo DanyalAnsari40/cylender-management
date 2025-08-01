@@ -419,14 +419,7 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
       case "cleared":
         return <Badge className="bg-green-100 text-green-800 border-green-200">Cleared</Badge>
       case "overdue":
-        return <Badge className="bg-red-100 text-red-800 border-red-200">Overdue</Badge>
-      // Legacy support for old status values
-      case "active":
-        return <Badge className="bg-green-100 text-green-800 border-green-200">Active</Badge>
-      case "returned":
-        return <Badge className="bg-blue-100 text-blue-800 border-blue-200">Returned</Badge>
-      case "damaged":
-        return <Badge className="bg-red-100 text-red-800 border-red-200">Damaged</Badge>
+        return <Badge className="bg-red-100 text-red-800 border-red-200">Overdue</Badge>     
       default:
         return <Badge variant="secondary">{status}</Badge>
     }
@@ -815,7 +808,7 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
                         </TableCell>
                         <TableCell className="p-4 font-medium">{transaction.cylinderSize}</TableCell>
                         <TableCell className="p-4">{transaction.quantity}</TableCell>
-                        <TableCell className="p-4 font-semibold">${transaction.amount.toFixed(2)}</TableCell>
+                        <TableCell className="p-4 font-semibold">AED {transaction.amount.toFixed(2)}</TableCell>
                         <TableCell className="p-4">{getStatusBadge(transaction.status)}</TableCell>
                         <TableCell className="p-4">{new Date(transaction.createdAt).toLocaleDateString()}</TableCell>
                         <TableCell className="p-4">

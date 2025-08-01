@@ -41,8 +41,8 @@ const CylinderTransactionSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["active", "returned", "damaged"],
-      default: "active",
+      enum: ["pending", "cleared", "overdue"],
+      default: "pending",
     },
     notes: {
       type: String,

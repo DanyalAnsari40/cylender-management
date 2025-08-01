@@ -30,7 +30,7 @@ export async function POST(request) {
     const transactionData = {
       ...data,
       type: "deposit",
-      status: "active"
+      status: data.status || "pending"
     };
 
     const transaction = await CylinderTransaction.create(transactionData);

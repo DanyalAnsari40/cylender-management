@@ -30,7 +30,7 @@ export async function POST(request) {
     const transactionData = {
       ...data,
       type: "return",
-      status: "returned"
+      status: data.status || "pending"
     };
 
     const transaction = await CylinderTransaction.create(transactionData);
