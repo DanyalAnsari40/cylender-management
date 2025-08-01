@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Plus, Edit, Trash2, Users, Loader2, AlertCircle } from "lucide-react"
+import { Plus, Edit, Trash2, Users, Loader2, AlertCircle, Search } from "lucide-react"
 import { customersAPI } from "@/lib/api"
 
 interface Customer {
@@ -27,6 +27,12 @@ export function CustomerManagement() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
   const [error, setError] = useState<string>("")
+  const [searchTerm, setSearchTerm] = useState("")
+  
+  // Autocomplete functionality state for search filter
+  const [showSearchSuggestions, setShowSearchSuggestions] = useState(false)
+  const [filteredSearchSuggestions, setFilteredSearchSuggestions] = useState<Customer[]>([])
+  
   const [formData, setFormData] = useState({
     name: "",
     trNumber: "",
@@ -129,6 +135,54 @@ export function CustomerManagement() {
       }
     }
   }
+
+  // Customer search autocomplete functionality
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value)
+    
+    if (value.trim().length > 0) {
+      const filtered = customers.filter(customer => 
+        customer.name.toLowerCase().includes(value.toLowerCase()) ||
+        customer.trNumber.toLowerCase().includes(value.toLowerCase()) ||
+        customer.phone.includes(value) ||
+        customer.email.toLowerCase().includes(value.toLowerCase())
+      ).slice(0, 5) // Limit to 5 suggestions
+      
+      setFilteredSearchSuggestions(filtered)
+      setShowSearchSuggestions(true)
+    } else {
+      setShowSearchSuggestions(false)
+      setFilteredSearchSuggestions([])
+    }
+  }
+
+  const handleSearchSuggestionClick = (customer: Customer) => {
+    setSearchTerm(customer.name)
+    setShowSearchSuggestions(false)
+    setFilteredSearchSuggestions([])
+  }
+
+  const handleSearchInputBlur = () => {
+    // Delay hiding suggestions to allow click events
+    setTimeout(() => {
+      setShowSearchSuggestions(false)
+    }, 200)
+  }
+
+  const handleSearchInputFocus = () => {
+    if (searchTerm.trim().length > 0 && filteredSearchSuggestions.length > 0) {
+      setShowSearchSuggestions(true)
+    }
+  }
+
+  // Filter customers based on search term
+  const filteredCustomers = customers.filter(customer => {
+    if (!searchTerm.trim()) return true
+    return customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           customer.trNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           customer.phone.includes(searchTerm) ||
+           customer.email.toLowerCase().includes(searchTerm.toLowerCase())
+  })
 
   if (loading) {
     return (
@@ -287,10 +341,56 @@ export function CustomerManagement() {
         </div>
       </div>
 
+      {/* Search Filter */}
+      <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border border-gray-200 p-4 sm:p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <Search className="w-5 h-5 text-gray-500" />
+          <h3 className="text-lg font-semibold text-gray-800">Search Customers</h3>
+        </div>
+        <div className="relative">
+          <Input
+            type="text"
+            placeholder="Search by name, TR number, phone, or email..."
+            value={searchTerm}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            onFocus={handleSearchInputFocus}
+            onBlur={handleSearchInputBlur}
+            className="w-full h-11 sm:h-12 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2B3068] focus:border-transparent"
+          />
+          
+          {/* Search Suggestions Dropdown */}
+          {showSearchSuggestions && filteredSearchSuggestions.length > 0 && (
+            <div className="absolute top-full left-0 right-0 z-50 bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto">
+              {filteredSearchSuggestions.map((customer) => (
+                <div
+                  key={customer._id}
+                  onClick={() => handleSearchSuggestionClick(customer)}
+                  className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                >
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900">{customer.name}</p>
+                      <p className="text-sm text-gray-600">TR: {customer.trNumber}</p>
+                      <p className="text-sm text-gray-600">{customer.phone}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-gray-500">{customer.email}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Customers List */}
       <Card className="border-0 shadow-xl rounded-xl sm:rounded-2xl overflow-hidden">
         <CardHeader className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] text-white p-4 sm:p-6">
-          <CardTitle className="text-lg sm:text-xl lg:text-2xl font-bold">Customers List ({Array.isArray(customers) ? customers.length : 0})</CardTitle>
+          <CardTitle className="text-lg sm:text-xl lg:text-2xl font-bold">
+            Customers List ({Array.isArray(filteredCustomers) ? filteredCustomers.length : 0}
+            {searchTerm && ` of ${Array.isArray(customers) ? customers.length : 0}`})
+          </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {/* Desktop Table View */}
@@ -307,7 +407,7 @@ export function CustomerManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {Array.isArray(customers) && customers.map((customer) => (
+                {Array.isArray(filteredCustomers) && filteredCustomers.map((customer) => (
                   <TableRow key={customer._id} className="hover:bg-gray-50 transition-colors border-b border-gray-100">
                     <TableCell className="font-semibold text-[#2B3068] p-4">{customer.name}</TableCell>
                     <TableCell className="p-4">{customer.trNumber}</TableCell>
@@ -336,13 +436,17 @@ export function CustomerManagement() {
                     </TableCell>
                   </TableRow>
                 ))}
-                {(!Array.isArray(customers) || customers.length === 0) && (
+                {(!Array.isArray(filteredCustomers) || filteredCustomers.length === 0) && (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-12">
                       <div className="text-gray-500">
                         <Users className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                        <p className="text-lg font-medium">No customers found</p>
-                        <p className="text-sm">Add your first customer to get started</p>
+                        <p className="text-lg font-medium">
+                          {searchTerm ? "No customers match your search" : "No customers found"}
+                        </p>
+                        <p className="text-sm">
+                          {searchTerm ? "Try adjusting your search terms" : "Add your first customer to get started"}
+                        </p>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -353,9 +457,9 @@ export function CustomerManagement() {
 
           {/* Mobile Card View */}
           <div className="lg:hidden">
-            {Array.isArray(customers) && customers.length > 0 ? (
+            {Array.isArray(filteredCustomers) && filteredCustomers.length > 0 ? (
               <div className="divide-y divide-gray-200">
-                {customers.map((customer) => (
+                {filteredCustomers.map((customer) => (
                   <div key={customer._id} className="p-4 sm:p-6 hover:bg-gray-50 transition-colors">
                     <div className="space-y-3">
                       <div className="flex justify-between items-start">
@@ -404,8 +508,12 @@ export function CustomerManagement() {
               <div className="text-center py-12 px-4">
                 <div className="text-gray-500">
                   <Users className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-4 opacity-50" />
-                  <p className="text-base sm:text-lg font-medium">No customers found</p>
-                  <p className="text-sm">Add your first customer to get started</p>
+                  <p className="text-base sm:text-lg font-medium">
+                    {searchTerm ? "No customers match your search" : "No customers found"}
+                  </p>
+                  <p className="text-sm">
+                    {searchTerm ? "Try adjusting your search terms" : "Add your first customer to get started"}
+                  </p>
                 </div>
               </div>
             )}

@@ -63,6 +63,10 @@ export function Reports() {
   const [customers, setCustomers] = useState<CustomerLedgerData[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set())
+  
+  // Autocomplete functionality state
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [filteredSuggestions, setFilteredSuggestions] = useState<CustomerLedgerData[]>([])
 
   // Receipt and signature functionality state
   const [showSignatureDialog, setShowSignatureDialog] = useState(false)
@@ -252,6 +256,44 @@ export function Reports() {
   const handleFilter = async () => {
     setLoading(true)
     await fetchLedgerData()
+  }
+
+  // Autocomplete functionality
+  const handleCustomerNameChange = (value: string) => {
+    setFilters({ ...filters, customerName: value })
+    
+    if (value.trim().length > 0) {
+      const filtered = customers.filter(customer => 
+        customer.name.toLowerCase().includes(value.toLowerCase()) ||
+        customer.trNumber.toLowerCase().includes(value.toLowerCase()) ||
+        customer.phone.includes(value)
+      ).slice(0, 5) // Limit to 5 suggestions
+      
+      setFilteredSuggestions(filtered)
+      setShowSuggestions(true)
+    } else {
+      setShowSuggestions(false)
+      setFilteredSuggestions([])
+    }
+  }
+
+  const handleSuggestionClick = (customer: CustomerLedgerData) => {
+    setFilters({ ...filters, customerName: customer.name })
+    setShowSuggestions(false)
+    setFilteredSuggestions([])
+  }
+
+  const handleInputBlur = () => {
+    // Delay hiding suggestions to allow click events
+    setTimeout(() => {
+      setShowSuggestions(false)
+    }, 200)
+  }
+
+  const handleInputFocus = () => {
+    if (filters.customerName.trim().length > 0 && filteredSuggestions.length > 0) {
+      setShowSuggestions(true)
+    }
   }
 
   const toggleCustomerExpansion = (customerId: string) => {
@@ -495,14 +537,39 @@ export function Reports() {
         <CardContent className="space-y-4">
           {/* Filters */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="space-y-2">
+            <div className="space-y-2 relative">
               <Label htmlFor="customerName">Customer Name</Label>
               <Input
                 id="customerName"
-                placeholder="Search by name..."
+                placeholder="Search by name, TR number, or phone..."
                 value={filters.customerName}
-                onChange={(e) => setFilters({ ...filters, customerName: e.target.value })}
+                onChange={(e) => handleCustomerNameChange(e.target.value)}
+                onFocus={handleInputFocus}
+                onBlur={handleInputBlur}
+                className="pr-10"
               />
+              {showSuggestions && filteredSuggestions.length > 0 && (
+                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                  {filteredSuggestions.map((customer) => (
+                    <div
+                      key={customer._id}
+                      className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                      onClick={() => handleSuggestionClick(customer)}
+                    >
+                      <div className="flex flex-col">
+                        <span className="font-medium text-gray-900">{customer.name}</span>
+                        <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
+                          <span>TR: {customer.trNumber}</span>
+                          <span>Phone: {customer.phone}</span>
+                          <span className="ml-auto">
+                            {getStatusBadge(customer.status)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">

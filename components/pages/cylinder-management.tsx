@@ -61,6 +61,15 @@ export function CylinderManagement() {
   const [customerSignature, setCustomerSignature] = useState<string>("") 
   const [statusFilter, setStatusFilter] = useState("all")
   const [activeTab, setActiveTab] = useState("all")
+  
+  // Customer autocomplete functionality for form
+  const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false)
+  const [filteredCustomerSuggestions, setFilteredCustomerSuggestions] = useState<Customer[]>([])
+  const [customerSearchTerm, setCustomerSearchTerm] = useState("")
+  
+  // Search filter autocomplete functionality
+  const [showSearchSuggestions, setShowSearchSuggestions] = useState(false)
+  const [filteredSearchSuggestions, setFilteredSearchSuggestions] = useState<Customer[]>([])
 
   // Form state
   const [formData, setFormData] = useState({
@@ -185,6 +194,9 @@ export function CylinderManagement() {
       status: "pending" as any, // Default to pending
       notes: "",
     })
+    setCustomerSearchTerm("")
+    setShowCustomerSuggestions(false)
+    setFilteredCustomerSuggestions([])
     setEditingTransaction(null)
   }
 
@@ -202,6 +214,9 @@ export function CylinderManagement() {
       status: transaction.status,
       notes: transaction.notes || "",
     })
+    setCustomerSearchTerm(transaction.customer.name)
+    setShowCustomerSuggestions(false)
+    setFilteredCustomerSuggestions([])
     setIsDialogOpen(true)
   }
 
@@ -296,6 +311,83 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
     setShowSignatureDialog(false)
     setPendingTransaction(null)
     setCustomerSignature("")
+  }
+
+  // Customer autocomplete functionality
+  const handleCustomerSearchChange = (value: string) => {
+    setCustomerSearchTerm(value)
+    
+    if (value.trim().length > 0) {
+      const filtered = customers.filter(customer => 
+        customer.name.toLowerCase().includes(value.toLowerCase()) ||
+        customer.phone.includes(value) ||
+        (customer.email && customer.email.toLowerCase().includes(value.toLowerCase()))
+      ).slice(0, 5) // Limit to 5 suggestions
+      
+      setFilteredCustomerSuggestions(filtered)
+      setShowCustomerSuggestions(true)
+    } else {
+      setShowCustomerSuggestions(false)
+      setFilteredCustomerSuggestions([])
+    }
+  }
+
+  const handleCustomerSuggestionClick = (customer: Customer) => {
+    setFormData({ ...formData, customerId: customer._id })
+    setCustomerSearchTerm(customer.name)
+    setShowCustomerSuggestions(false)
+    setFilteredCustomerSuggestions([])
+  }
+
+  const handleCustomerInputBlur = () => {
+    // Delay hiding suggestions to allow click events
+    setTimeout(() => {
+      setShowCustomerSuggestions(false)
+    }, 200)
+  }
+
+  const handleCustomerInputFocus = () => {
+    if (customerSearchTerm.trim().length > 0 && filteredCustomerSuggestions.length > 0) {
+      setShowCustomerSuggestions(true)
+    }
+  }
+
+  // Search filter autocomplete functionality
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value)
+    
+    if (value.trim().length > 0) {
+      const filtered = customers.filter(customer => 
+        customer.name.toLowerCase().includes(value.toLowerCase()) ||
+        customer.phone.includes(value) ||
+        (customer.email && customer.email.toLowerCase().includes(value.toLowerCase()))
+      ).slice(0, 5) // Limit to 5 suggestions
+      
+      setFilteredSearchSuggestions(filtered)
+      setShowSearchSuggestions(true)
+    } else {
+      setShowSearchSuggestions(false)
+      setFilteredSearchSuggestions([])
+    }
+  }
+
+  const handleSearchSuggestionClick = (customer: Customer) => {
+    setSearchTerm(customer.name)
+    setShowSearchSuggestions(false)
+    setFilteredSearchSuggestions([])
+  }
+
+  const handleSearchInputBlur = () => {
+    // Delay hiding suggestions to allow click events
+    setTimeout(() => {
+      setShowSearchSuggestions(false)
+    }, 200)
+  }
+
+  const handleSearchInputFocus = () => {
+    if (searchTerm.trim().length > 0 && filteredSearchSuggestions.length > 0) {
+      setShowSearchSuggestions(true)
+    }
   }
 
   const filteredTransactions = (transactions || []).filter((transaction) => {
@@ -432,9 +524,34 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
             <Input
               placeholder="Search by customer or cylinder size..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              onFocus={handleSearchInputFocus}
+              onBlur={handleSearchInputBlur}
               className="pl-10"
             />
+            
+            {/* Search Suggestions Dropdown */}
+            {showSearchSuggestions && filteredSearchSuggestions.length > 0 && (
+              <div className="absolute top-full left-0 right-0 z-50 bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto">
+                {filteredSearchSuggestions.map((customer) => (
+                  <div
+                    key={customer._id}
+                    onClick={() => handleSearchSuggestionClick(customer)}
+                    className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-900">{customer.name}</p>
+                        <p className="text-sm text-gray-600">{customer.phone}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-gray-500">{customer.email}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-full sm:w-48">
@@ -483,14 +600,37 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
                   </Select>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-2 relative">
                   <Label htmlFor="customer">Customer *</Label>
-                  <CustomerDropdown
-                    onSelect={(value) => setFormData({ ...formData, customerId: value })}
-                    selectedCustomerId={formData.customerId}
-                    placeholder="Select customer"
-                    showDetails={false}
+                  <Input
+                    id="customer"
+                    placeholder="Search by name, phone, or email..."
+                    value={customerSearchTerm}
+                    onChange={(e) => handleCustomerSearchChange(e.target.value)}
+                    onFocus={handleCustomerInputFocus}
+                    onBlur={handleCustomerInputBlur}
+                    className="pr-10"
+                    required
                   />
+                  {showCustomerSuggestions && filteredCustomerSuggestions.length > 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                      {filteredCustomerSuggestions.map((customer) => (
+                        <div
+                          key={customer._id}
+                          className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                          onClick={() => handleCustomerSuggestionClick(customer)}
+                        >
+                          <div className="flex flex-col">
+                            <span className="font-medium text-gray-900">{customer.name}</span>
+                            <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
+                              <span>Phone: {customer.phone}</span>
+                              {customer.email && <span>Email: {customer.email}</span>}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
