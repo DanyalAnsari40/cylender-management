@@ -282,9 +282,9 @@ export function Reports() {
   }
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-AE', {
       style: 'currency',
-      currency: 'USD'
+      currency: 'AED'
     }).format(amount)
   }
 
@@ -637,12 +637,71 @@ export function Reports() {
                     {expandedCustomers.has(customer._id) && (
                       <TableRow>
                         <TableCell colSpan={10} className="bg-gray-50 p-6">
-                          <Tabs defaultValue="sales" className="w-full">
-                            <TabsList className="grid w-full grid-cols-3">
-                              <TabsTrigger value="sales">Recent Sales ({customer.recentSales?.length || 0})</TabsTrigger>
-                              <TabsTrigger value="cylinders">Cylinder Transactions ({customer.recentCylinderTransactions?.length || 0})</TabsTrigger>
-                              <TabsTrigger value="summary">Financial Summary</TabsTrigger>
+                          <Tabs defaultValue="all" className="w-full">
+                            <TabsList className="grid w-full grid-cols-4">
+                              <TabsTrigger value="all">All Transactions ({(customer.recentSales?.length || 0) + (customer.recentCylinderTransactions?.length || 0)})</TabsTrigger>
+                              <TabsTrigger value="sales">Gas Sales ({customer.recentSales?.length || 0})</TabsTrigger>
+                              <TabsTrigger value="cylinders">Cylinder Mgmt ({customer.recentCylinderTransactions?.length || 0})</TabsTrigger>
+                              <TabsTrigger value="summary">Summary</TabsTrigger>
                             </TabsList>
+                            
+                            <TabsContent value="all" className="mt-4">
+                              {/* Combined transactions view */}
+                              {(() => {
+                                const allTransactions = [
+                                  ...(customer.recentSales || []).map(sale => ({
+                                    ...sale,
+                                    type: 'gas_sale',
+                                    displayType: 'Gas Sale',
+                                    amount: sale.totalAmount,
+                                    description: `Invoice #${sale.invoiceNumber}`,
+                                    status: sale.amountPaid >= sale.totalAmount ? 'paid' : 'pending'
+                                  })),
+                                  ...(customer.recentCylinderTransactions || []).map(transaction => ({
+                                    ...transaction,
+                                    type: 'cylinder',
+                                    displayType: `Cylinder ${transaction.type}`,
+                                    description: `${transaction.cylinderSize} (${transaction.quantity}x)`,
+                                    amount: transaction.amount
+                                  }))
+                                ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                                
+                                return allTransactions.length > 0 ? (
+                                  <Table>
+                                    <TableHeader>
+                                      <TableRow>
+                                        <TableHead>Type</TableHead>
+                                        <TableHead>Date</TableHead>
+                                        <TableHead>Description</TableHead>
+                                        <TableHead>Amount</TableHead>
+                                        <TableHead>Status</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {allTransactions.map((transaction, index) => (
+                                        <TableRow key={`${transaction.type}-${transaction._id}-${index}`}>
+                                          <TableCell>
+                                            <Badge 
+                                              variant={transaction.type === 'gas_sale' ? 'default' : 'outline'}
+                                              className={transaction.type === 'gas_sale' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}
+                                            >
+                                              {transaction.displayType}
+                                            </Badge>
+                                          </TableCell>
+                                          <TableCell>{formatDate(transaction.createdAt)}</TableCell>
+                                          <TableCell>{transaction.description}</TableCell>
+                                          <TableCell>{formatCurrency(transaction.amount)}</TableCell>
+                                          <TableCell>{getStatusBadge(transaction.status)}</TableCell>
+                                        </TableRow>
+                                      ))}
+                                    </TableBody>
+                                  </Table>
+                                ) : (
+                                  <p className="text-gray-500 text-center py-4">No transactions found</p>
+                                )
+                              })()
+                              }
+                            </TabsContent>
                             
                             <TabsContent value="sales" className="mt-4">
                               {customer.recentSales && customer.recentSales.length > 0 ? (
@@ -661,8 +720,8 @@ export function Reports() {
                                       <TableRow key={sale._id}>
                                         <TableCell className="font-mono">{sale.invoiceNumber}</TableCell>
                                         <TableCell>{formatDate(sale.createdAt)}</TableCell>
-                                        <TableCell>{formatCurrency(sale.totalAmount)}</TableCell>
-                                        <TableCell>{formatCurrency(sale.amountPaid)}</TableCell>
+                                        <TableCell>{formatCurrency(sale.totalAmount || 0)}</TableCell>
+                                        <TableCell>{formatCurrency(sale.amountPaid || 0)}</TableCell>
                                         <TableCell>{sale.items?.length || 0} items</TableCell>
                                       </TableRow>
                                     ))}
@@ -712,7 +771,10 @@ export function Reports() {
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <Card>
                                   <CardHeader className="pb-2">
-                                    <CardTitle className="text-sm">Sales Summary</CardTitle>
+                                    <CardTitle className="text-sm flex items-center gap-2">
+                                      <Fuel className="h-4 w-4 text-blue-600" />
+                                      Gas Sales Summary
+                                    </CardTitle>
                                   </CardHeader>
                                   <CardContent>
                                     <div className="space-y-2 text-sm">
@@ -722,11 +784,17 @@ export function Reports() {
                                       </div>
                                       <div className="flex justify-between">
                                         <span>Sales Amount:</span>
-                                        <span className="font-semibold">{formatCurrency(customer.totalSalesAmount)}</span>
+                                        <span className="font-semibold text-blue-600">{formatCurrency(customer.totalSalesAmount)}</span>
                                       </div>
                                       <div className="flex justify-between">
                                         <span>Amount Paid:</span>
-                                        <span className="font-semibold">{formatCurrency(customer.totalPaidAmount)}</span>
+                                        <span className="font-semibold text-green-600">{formatCurrency(customer.totalPaidAmount)}</span>
+                                      </div>
+                                      <div className="flex justify-between border-t pt-2">
+                                        <span>Outstanding:</span>
+                                        <span className={`font-semibold ${(customer.totalSalesAmount - customer.totalPaidAmount) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                          {formatCurrency(customer.totalSalesAmount - customer.totalPaidAmount)}
+                                        </span>
                                       </div>
                                     </div>
                                   </CardContent>
@@ -734,7 +802,10 @@ export function Reports() {
                                 
                                 <Card>
                                   <CardHeader className="pb-2">
-                                    <CardTitle className="text-sm">Cylinder Summary</CardTitle>
+                                    <CardTitle className="text-sm flex items-center gap-2">
+                                      <Cylinder className="h-4 w-4 text-green-600" />
+                                      Cylinder Management
+                                    </CardTitle>
                                   </CardHeader>
                                   <CardContent>
                                     <div className="space-y-2 text-sm">
@@ -750,9 +821,9 @@ export function Reports() {
                                         <span>Returns:</span>
                                         <span className="font-semibold">{customer.totalReturns}</span>
                                       </div>
-                                      <div className="flex justify-between">
+                                      <div className="flex justify-between border-t pt-2">
                                         <span>Total Amount:</span>
-                                        <span className="font-semibold">{formatCurrency(customer.totalCylinderAmount)}</span>
+                                        <span className="font-semibold text-green-600">{formatCurrency(customer.totalCylinderAmount)}</span>
                                       </div>
                                     </div>
                                   </CardContent>
@@ -760,10 +831,25 @@ export function Reports() {
                                 
                                 <Card>
                                   <CardHeader className="pb-2">
-                                    <CardTitle className="text-sm">Financial Summary</CardTitle>
+                                    <CardTitle className="text-sm flex items-center gap-2">
+                                      <DollarSign className="h-4 w-4 text-purple-600" />
+                                      Overall Financial Summary
+                                    </CardTitle>
                                   </CardHeader>
                                   <CardContent>
                                     <div className="space-y-2 text-sm">
+                                      <div className="flex justify-between">
+                                        <span>Gas Sales Revenue:</span>
+                                        <span className="font-semibold text-blue-600">{formatCurrency(customer.totalSalesAmount)}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>Cylinder Revenue:</span>
+                                        <span className="font-semibold text-green-600">{formatCurrency(customer.totalCylinderAmount)}</span>
+                                      </div>
+                                      <div className="flex justify-between border-t pt-1">
+                                        <span>Total Revenue:</span>
+                                        <span className="font-semibold">{formatCurrency(customer.totalSalesAmount + customer.totalCylinderAmount)}</span>
+                                      </div>
                                       <div className="flex justify-between">
                                         <span>Total Debit:</span>
                                         <span className="font-semibold text-red-600">{formatCurrency(customer.totalDebit)}</span>

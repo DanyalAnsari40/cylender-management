@@ -44,6 +44,11 @@ const purchaseOrderSchema = new mongoose.Schema({
     enum: ['pending', 'completed', 'cancelled'],
     default: 'pending'
   },
+  inventoryStatus: {
+    type: String,
+    enum: ['pending', 'received'],
+    default: 'pending'
+  },
   poNumber: {
     type: String,
     required: true,

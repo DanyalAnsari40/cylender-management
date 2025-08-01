@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { DollarSign, Users, Package, TrendingUp, AlertCircle } from "lucide-react"
+import { DollarSign, Users, Package, TrendingUp, AlertCircle, Fuel, Cylinder } from "lucide-react"
 import { dashboardAPI } from "@/lib/api"
 
 export function Dashboard() {
@@ -13,6 +13,8 @@ export function Dashboard() {
     totalEmployees: 0,
     productsSold: 0,
     totalSales: 0,
+    gasSales: 0,
+    cylinderRevenue: 0,
   })
   const [loading, setLoading] = useState(true)
 
@@ -35,6 +37,8 @@ export function Dashboard() {
         totalEmployees: statsData.totalEmployees || 0,
         productsSold: statsData.productsSold || 0,
         totalSales: statsData.totalSales || 0,
+        gasSales: statsData.gasSales || 0,
+        cylinderRevenue: statsData.cylinderRefills || 0,
       })
     } catch (error) {
       console.error("Failed to fetch stats:", error)
@@ -46,6 +50,8 @@ export function Dashboard() {
         totalEmployees: 0,
         productsSold: 0,
         totalSales: 0,
+        gasSales: 0,
+        cylinderRevenue: 0,
       })
     } finally {
       setLoading(false)
@@ -55,10 +61,27 @@ export function Dashboard() {
   const cards = [
     {
       title: "Total Revenue",
-      value: `AED ${stats.totalRevenue.toLocaleString()}`,
+      value: `AED ${(stats.totalRevenue + stats.gasSales + stats.cylinderRevenue).toLocaleString()}`,
       icon: DollarSign,
       color: "#2B3068",
       bgColor: "bg-gradient-to-br from-blue-50 to-indigo-100",
+      description: "Combined revenue from all sources"
+    },
+    {
+      title: "Gas Sales Revenue",
+      value: `AED ${stats.gasSales.toLocaleString()}`,
+      icon: Fuel,
+      color: "#059669",
+      bgColor: "bg-gradient-to-br from-green-50 to-emerald-100",
+      description: "Revenue from gas sales"
+    },
+    {
+      title: "Cylinder Revenue",
+      value: `AED ${stats.cylinderRevenue.toLocaleString()}`,
+      icon: Cylinder,
+      color: "#7C3AED",
+      bgColor: "bg-gradient-to-br from-purple-50 to-violet-100",
+      description: "Deposits, refills & returns"
     },
     {
       title: "Total Due",
@@ -66,20 +89,23 @@ export function Dashboard() {
       icon: AlertCircle,
       color: "#DC2626",
       bgColor: "bg-gradient-to-br from-red-50 to-red-100",
+      description: "Outstanding payments"
     },
     {
       title: "Total Customers",
       value: stats.totalCustomers.toString(),
       icon: Users,
-      color: "#059669",
-      bgColor: "bg-gradient-to-br from-green-50 to-emerald-100",
+      color: "#F59E0B",
+      bgColor: "bg-gradient-to-br from-yellow-50 to-amber-100",
+      description: "Registered customers"
     },
     {
       title: "Products Sold",
       value: stats.productsSold.toString(),
       icon: Package,
-      color: "#7C3AED",
-      bgColor: "bg-gradient-to-br from-purple-50 to-violet-100",
+      color: "#10B981",
+      bgColor: "bg-gradient-to-br from-teal-50 to-green-100",
+      description: "Units sold"
     },
   ]
 
@@ -90,8 +116,8 @@ export function Dashboard() {
           <div className="h-8 bg-gray-200 rounded w-1/4 mb-2"></div>
           <div className="h-4 bg-gray-200 rounded w-1/3"></div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[1, 2, 3, 4].map((i) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
             <div key={i} className="animate-pulse">
               <div className="h-32 bg-gray-200 rounded-lg"></div>
             </div>
@@ -122,10 +148,7 @@ export function Dashboard() {
                 {card.value}
               </div>
               <p className="text-xs text-gray-600 mt-1">
-                {card.title === "Total Revenue" && "Total amount received"}
-                {card.title === "Total Due" && "Outstanding payments"}
-                {card.title === "Total Customers" && "Registered customers"}
-                {card.title === "Products Sold" && "Units sold"}
+                {card.description}
               </p>
             </CardContent>
           </Card>

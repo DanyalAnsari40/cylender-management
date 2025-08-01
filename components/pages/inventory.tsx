@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Package, Loader2, Edit } from "lucide-react"
-import { purchaseOrdersAPI } from "@/lib/api"
+import { purchaseOrdersAPI, inventoryAPI } from "@/lib/api"
 
 interface InventoryItem {
   id: string
@@ -44,45 +44,22 @@ export function Inventory() {
   const fetchInventoryData = async () => {
     try {
       setError("")
-      console.log("Fetching purchase orders from API...")
+      console.log("Fetching inventory data from API...")
       
-      const purchaseOrdersRes = await purchaseOrdersAPI.getAll()
-      console.log("Purchase orders response:", purchaseOrdersRes)
+      const inventoryRes = await inventoryAPI.getAll()
+      console.log("Inventory response:", inventoryRes)
       
-      // The API response structure is: response.data.data (nested)
-      const ordersData = purchaseOrdersRes.data?.data || purchaseOrdersRes.data || []
-      console.log("Purchase orders data:", ordersData)
+      // The API response structure
+      const inventoryData = inventoryRes.data?.data || inventoryRes.data || []
+      console.log("Inventory data:", inventoryData)
       
       // Ensure it's always an array
-      const purchaseOrders = Array.isArray(ordersData) ? ordersData : []
-      console.log("Final purchase orders data:", purchaseOrders)
-      
-      const savedInventory = JSON.parse(localStorage.getItem("inventory") || "[]")
-      console.log("Saved inventory:", savedInventory)
-
-      // Convert purchase orders to inventory items
-      const inventoryItems = purchaseOrders.map((order: any) => {
-        const existingItem = savedInventory.find((item: any) => item.id === order._id)
-
-        const inventoryItem = {
-          id: order._id,
-          poNumber: order.poNumber || 'N/A',
-          productName: order.product?.name || "Unknown Product",
-          supplierName: order.supplier?.companyName || "Unknown Supplier", 
-          purchaseDate: order.purchaseDate,
-          quantity: order.quantity || 0,
-          unitPrice: order.unitPrice || 0,
-          totalAmount: order.totalAmount || 0,
-          status: existingItem?.status || "pending",
-          purchaseType: order.purchaseType,
-        }
-        console.log("Processed inventory item:", inventoryItem)
-        return inventoryItem
-      })
+      const inventoryItems = Array.isArray(inventoryData) ? inventoryData : []
+      console.log("Final inventory data:", inventoryItems)
 
       setInventory(inventoryItems)
     } catch (error: any) {
-      console.error("Failed to fetch purchase orders:", error)
+      console.error("Failed to fetch inventory data:", error)
       if (error.response?.status === 401) {
         setError("Authentication required. Please log in to view inventory.")
       } else {
@@ -94,11 +71,27 @@ export function Inventory() {
     }
   }
 
-  const handleReceiveInventory = (id: string) => {
-    const updatedInventory = inventory.map((item) => (item.id === id ? { ...item, status: "received" as const } : item))
-
-    setInventory(updatedInventory)
-    localStorage.setItem("inventory", JSON.stringify(updatedInventory))
+  const handleReceiveInventory = async (id: string) => {
+    try {
+      console.log("Updating inventory status to received for ID:", id)
+      
+      // Update status in database
+      const response = await inventoryAPI.receiveInventory(id)
+      console.log("Inventory update response:", response)
+      
+      if (response.data.success) {
+        // Update local state
+        const updatedInventory = inventory.map((item) => 
+          item.id === id ? { ...item, status: "received" as const } : item
+        )
+        setInventory(updatedInventory)
+      } else {
+        setError("Failed to update inventory status")
+      }
+    } catch (error: any) {
+      console.error("Failed to update inventory status:", error)
+      setError(`Failed to update inventory: ${error.message}`)
+    }
   }
 
   const handleEditInventory = (item: InventoryItem) => {
@@ -111,23 +104,40 @@ export function Inventory() {
     setIsEditDialogOpen(true)
   }
 
-  const handleSaveEdit = () => {
-    if (!editingItem) return
+  const handleSaveEdit = async () => {
+    if (!editingItem || !editFormData.quantity || !editFormData.unitPrice) return
 
-    const quantity = Number.parseFloat(editFormData.quantity)
-    const unitPrice = Number.parseFloat(editFormData.unitPrice)
-    const totalAmount = quantity * unitPrice
-
-    const updatedInventory = inventory.map((item) => 
-      item.id === editingItem.id 
-        ? { ...item, quantity, unitPrice, totalAmount }
-        : item
-    )
-
-    setInventory(updatedInventory)
-    localStorage.setItem("inventory", JSON.stringify(updatedInventory))
-    setIsEditDialogOpen(false)
-    setEditingItem(null)
+    try {
+      const quantity = Number.parseFloat(editFormData.quantity)
+      const unitPrice = Number.parseFloat(editFormData.unitPrice)
+      
+      console.log("Updating inventory item:", editingItem.id, { quantity, unitPrice })
+      
+      // Update in database
+      const response = await inventoryAPI.updateItem(editingItem.id, {
+        quantity,
+        unitPrice
+      })
+      
+      console.log("Inventory update response:", response)
+      
+      if (response.data.success) {
+        // Update local state with response data
+        const updatedItem = response.data.data
+        const updatedInventory = inventory.map((item) =>
+          item.id === editingItem.id ? updatedItem : item
+        )
+        
+        setInventory(updatedInventory)
+        setIsEditDialogOpen(false)
+        setEditingItem(null)
+      } else {
+        setError("Failed to update inventory item")
+      }
+    } catch (error: any) {
+      console.error("Failed to update inventory item:", error)
+      setError(`Failed to update inventory: ${error.message}`)
+    }
   }
 
   const handleCancelEdit = () => {
