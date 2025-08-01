@@ -365,7 +365,7 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="pt-16 lg:pt-0 space-y-8">
       <div className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] rounded-2xl p-8 text-white">
         <h1 className="text-4xl font-bold mb-2">Cylinder Management</h1>
         <p className="text-white/80 text-lg">Manage cylinder deposits, refills, and returns</p>

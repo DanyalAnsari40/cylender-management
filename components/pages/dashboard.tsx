@@ -128,23 +128,23 @@ export function Dashboard() {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] rounded-2xl p-8 text-white">
-        <h1 className="text-4xl font-bold mb-2">Dashboard</h1>
-        <p className="text-white/80 text-lg">Welcome to BARAKAH ALJAZEERA Gas Management System</p>
+    <div className="pt-16 lg:pt-0 space-y-4 sm:space-y-6 lg:space-y-8">
+      <div className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] rounded-xl sm:rounded-2xl p-4 sm:p-6 lg:p-8 text-white">
+        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2">Dashboard</h1>
+        <p className="text-white/80 text-sm sm:text-base lg:text-lg">Welcome to BARAKAH ALJAZEERA Gas Management System</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
         {cards.map((card, index) => (
           <Card key={index} className={`hover:shadow-xl transition-all duration-300 border-0 ${card.bgColor}`}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-700">{card.title}</CardTitle>
-              <div className="p-2 rounded-lg" style={{ backgroundColor: `${card.color}15` }}>
-                <card.icon className="h-5 w-5" style={{ color: card.color }} />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-4 sm:p-6">
+              <CardTitle className="text-xs sm:text-sm font-medium text-gray-700 leading-tight">{card.title}</CardTitle>
+              <div className="p-2 rounded-lg flex-shrink-0" style={{ backgroundColor: `${card.color}15` }}>
+                <card.icon className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: card.color }} />
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold" style={{ color: card.color }}>
+            <CardContent className="p-4 sm:p-6 pt-0">
+              <div className="text-xl sm:text-2xl lg:text-3xl font-bold" style={{ color: card.color }}>
                 {card.value}
               </div>
               <p className="text-xs text-gray-600 mt-1">
@@ -155,25 +155,25 @@ export function Dashboard() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
         <Card className="border-0 shadow-lg">
-          <CardHeader className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] text-white rounded-t-lg">
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="w-5 h-5" />
+          <CardHeader className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] text-white rounded-t-lg p-4 sm:p-6">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />
               Recent Activity
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-6">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+          <CardContent className="p-4 sm:p-6">
+            <div className="space-y-3 sm:space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-gray-50 rounded-lg gap-1 sm:gap-0">
                 <span className="text-sm text-gray-700">New customer registered</span>
                 <span className="text-xs text-gray-500">2 hours ago</span>
               </div>
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-gray-50 rounded-lg gap-1 sm:gap-0">
                 <span className="text-sm text-gray-700">Gas sale completed</span>
                 <span className="text-xs text-gray-500">4 hours ago</span>
               </div>
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-gray-50 rounded-lg gap-1 sm:gap-0">
                 <span className="text-sm text-gray-700">Inventory updated</span>
                 <span className="text-xs text-gray-500">6 hours ago</span>
               </div>
@@ -182,21 +182,21 @@ export function Dashboard() {
         </Card>
 
         <Card className="border-0 shadow-lg">
-          <CardHeader className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] text-white rounded-t-lg">
-            <CardTitle>Quick Actions</CardTitle>
+          <CardHeader className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] text-white rounded-t-lg p-4 sm:p-6">
+            <CardTitle className="text-base sm:text-lg">Quick Actions</CardTitle>
           </CardHeader>
-          <CardContent className="p-6">
-            <div className="grid grid-cols-2 gap-3">
-              <button className="p-4 text-left rounded-lg border border-gray-200 hover:bg-[#2B3068] hover:text-white transition-all duration-200 text-sm font-medium">
+          <CardContent className="p-4 sm:p-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button className="p-3 sm:p-4 text-left rounded-lg border border-gray-200 hover:bg-[#2B3068] hover:text-white transition-all duration-200 text-sm font-medium min-h-[44px] flex items-center">
                 Add New Product
               </button>
-              <button className="p-4 text-left rounded-lg border border-gray-200 hover:bg-[#2B3068] hover:text-white transition-all duration-200 text-sm font-medium">
+              <button className="p-3 sm:p-4 text-left rounded-lg border border-gray-200 hover:bg-[#2B3068] hover:text-white transition-all duration-200 text-sm font-medium min-h-[44px] flex items-center">
                 Create Sale
               </button>
-              <button className="p-4 text-left rounded-lg border border-gray-200 hover:bg-[#2B3068] hover:text-white transition-all duration-200 text-sm font-medium">
+              <button className="p-3 sm:p-4 text-left rounded-lg border border-gray-200 hover:bg-[#2B3068] hover:text-white transition-all duration-200 text-sm font-medium min-h-[44px] flex items-center">
                 Add Customer
               </button>
-              <button className="p-4 text-left rounded-lg border border-gray-200 hover:bg-[#2B3068] hover:text-white transition-all duration-200 text-sm font-medium">
+              <button className="p-3 sm:p-4 text-left rounded-lg border border-gray-200 hover:bg-[#2B3068] hover:text-white transition-all duration-200 text-sm font-medium min-h-[44px] flex items-center">
                 View Reports
               </button>
             </div>

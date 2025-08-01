@@ -94,7 +94,7 @@ export function MainLayout({ user, onLogout }: MainLayoutProps) {
       <div className="flex min-h-screen w-full bg-gray-50">
         <AppSidebar currentPage={currentPage} onPageChange={setCurrentPage} user={user} onLogout={handleLogout} unreadCount={unreadCount} setUnreadCount={setUnreadCount} />
         <main className="flex-1 overflow-auto">
-          <div className="p-4 sm:p-6 lg:p-8">{renderPage()}</div>
+          <div className="pt-16 lg:pt-0 p-3 sm:p-4 lg:p-6 xl:p-8">{renderPage()}</div>
         </main>
       </div>
     </SidebarProvider>

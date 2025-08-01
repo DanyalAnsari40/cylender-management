@@ -232,7 +232,7 @@ export function PurchaseManagement() {
   }
 
   return (
-    <div className="space-y-6 sm:space-y-8">
+    <div className="pt-16 lg:pt-0 space-y-6 sm:space-y-8">
       {/* Error Alert */}
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">

@@ -130,35 +130,35 @@ export function SupplierManagement() {
   }
 
   return (
-    <div className="space-y-8 p-6">
+    <div className="pt-16 lg:pt-0 space-y-4 sm:space-y-6 lg:space-y-8">
       {/* Header Section */}
-      <div className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] rounded-2xl p-8 text-white shadow-xl">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-4xl font-bold mb-2 flex items-center gap-3">
-              <Truck className="w-10 h-10" />
-              Supplier Management
+      <div className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] rounded-xl sm:rounded-2xl p-4 sm:p-6 lg:p-8 text-white shadow-xl">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 flex items-center gap-2 sm:gap-3">
+              <Truck className="w-6 h-6 sm:w-8 sm:h-8 lg:w-10 lg:h-10 flex-shrink-0" />
+              <span className="truncate">Supplier Management</span>
             </h1>
-            <p className="text-white/80 text-lg">Manage your suppliers and vendors</p>
+            <p className="text-white/80 text-sm sm:text-base lg:text-lg">Manage your supplier network and partnerships</p>
           </div>
 
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button
-                onClick={resetForm}
-                className="bg-white text-[#2B3068] hover:bg-white/90 font-semibold px-8 py-4 text-lg rounded-xl shadow-lg transition-all duration-300 hover:scale-105"
-              >
-                <Plus className="w-5 h-5 mr-2" />
-                Add Supplier
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader className="pb-6">
-                <DialogTitle className="text-2xl font-bold text-[#2B3068] flex items-center gap-2">
-                  <Truck className="w-6 h-6" />
-                  {editingSupplier ? "Edit Supplier" : "Add New Supplier"}
-                </DialogTitle>
-              </DialogHeader>
+          <div className="w-full sm:w-auto flex-shrink-0">
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  onClick={resetForm}
+                  className="w-full sm:w-auto bg-white text-[#2B3068] hover:bg-white/90 font-semibold px-4 sm:px-6 lg:px-8 py-3 sm:py-4 text-sm sm:text-base lg:text-lg rounded-xl shadow-lg transition-all duration-300 hover:scale-105 min-h-[44px]"
+                >
+                  <Plus className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
+                  Add Supplier
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="w-[95vw] max-w-[600px] max-h-[90vh] overflow-y-auto mx-auto">
+                <DialogHeader>
+                  <DialogTitle className="text-lg sm:text-xl lg:text-2xl font-bold text-[#2B3068] mb-4">
+                    {editingSupplier ? "Edit Supplier" : "Add New Supplier"}
+                  </DialogTitle>
+                </DialogHeader>
 
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -301,6 +301,7 @@ export function SupplierManagement() {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
       </div>
 
@@ -379,6 +380,7 @@ export function SupplierManagement() {
           </div>
         </CardContent>
       </Card>
+      
     </div>
   )
 }

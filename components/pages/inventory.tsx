@@ -161,12 +161,14 @@ export function Inventory() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold" style={{ color: "#2B3068" }}>
+    <div className="pt-16 lg:pt-0 space-y-4 sm:space-y-6">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] rounded-xl sm:rounded-2xl p-4 sm:p-6 lg:p-8 text-white">
+        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 flex items-center gap-3">
+          <Package className="w-6 h-6 sm:w-8 sm:h-8 lg:w-10 lg:h-10" />
           Inventory Management
         </h1>
-        <p className="text-gray-600">Track your inventory and receive purchase orders</p>
+        <p className="text-white/80 text-sm sm:text-base lg:text-lg">Track and manage your inventory items</p>
       </div>
 
       {error && (
@@ -176,124 +178,279 @@ export function Inventory() {
       )}
 
       <Tabs defaultValue="pending" className="w-full">
-        <TabsList>
-          <TabsTrigger value="pending">Pending Inventory ({pendingItems.length})</TabsTrigger>
-          <TabsTrigger value="received">Received Inventory ({receivedItems.length})</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-2 h-auto">
+          <TabsTrigger value="pending" className="text-xs sm:text-sm font-medium py-2 sm:py-3">
+            Pending Orders ({pendingItems.length})
+          </TabsTrigger>
+          <TabsTrigger value="received" className="text-xs sm:text-sm font-medium py-2 sm:py-3">
+            Received Items ({receivedItems.length})
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="pending">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2" style={{ color: "#2B3068" }}>
-                <Package className="w-5 h-5" />
-                Pending Inventory
-              </CardTitle>
+          <Card className="border-0 shadow-xl rounded-xl sm:rounded-2xl overflow-hidden">
+            <CardHeader className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] text-white p-4 sm:p-6">
+              <CardTitle className="text-lg sm:text-xl lg:text-2xl font-bold">Pending Purchase Orders</CardTitle>
             </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>PO Number</TableHead>
-                    <TableHead>Product</TableHead>
-                    <TableHead>Supplier</TableHead>
-                    <TableHead>Purchase Date</TableHead>
-                    <TableHead>Qty</TableHead>
-                    <TableHead>Total Amount (AED)</TableHead>
-                    <TableHead>Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {pendingItems.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.poNumber}</TableCell>
-                      <TableCell>{item.productName}</TableCell>
-                      <TableCell>{item.supplierName}</TableCell>
-                      <TableCell>{new Date(item.purchaseDate).toLocaleDateString()}</TableCell>
-                      <TableCell>{item.quantity}</TableCell>
-                      <TableCell>AED {item.totalAmount.toFixed(2)}</TableCell>
-                      <TableCell>
-                        <Button
-                          size="sm"
-                          onClick={() => handleReceiveInventory(item.id)}
-                          style={{ backgroundColor: "#2B3068" }}
-                          className="hover:opacity-90"
-                        >
-                          Accept
-                        </Button>
-                      </TableCell>
+            <CardContent className="p-0">
+              {/* Desktop Table View */}
+              <div className="hidden lg:block overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-gray-50 border-b-2 border-gray-200">
+                      <TableHead className="font-bold text-gray-700 p-4">PO Number</TableHead>
+                      <TableHead className="font-bold text-gray-700 p-4">Product</TableHead>
+                      <TableHead className="font-bold text-gray-700 p-4">Supplier</TableHead>
+                      <TableHead className="font-bold text-gray-700 p-4">Type</TableHead>
+                      <TableHead className="font-bold text-gray-700 p-4">Quantity</TableHead>
+                      <TableHead className="font-bold text-gray-700 p-4">Unit Price</TableHead>
+                      <TableHead className="font-bold text-gray-700 p-4">Total</TableHead>
+                      <TableHead className="font-bold text-gray-700 p-4">Actions</TableHead>
                     </TableRow>
-                  ))}
-                  {pendingItems.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center text-gray-500">
-                        No pending inventory items
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {pendingItems.map((item) => (
+                      <TableRow key={item.id} className="hover:bg-gray-50 transition-colors border-b border-gray-100">
+                        <TableCell className="font-semibold text-[#2B3068] p-4">{item.poNumber}</TableCell>
+                        <TableCell className="p-4">{item.productName}</TableCell>
+                        <TableCell className="p-4">{item.supplierName}</TableCell>
+                        <TableCell className="p-4">
+                          <Badge variant={item.purchaseType === "gas" ? "default" : "secondary"}>
+                            {item.purchaseType}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="p-4">{item.quantity}</TableCell>
+                        <TableCell className="p-4">AED {item.unitPrice.toFixed(2)}</TableCell>
+                        <TableCell className="p-4 font-semibold">AED {item.totalAmount.toFixed(2)}</TableCell>
+                        <TableCell className="p-4">
+                          <div className="flex space-x-2">
+                            <Button
+                              size="sm"
+                              onClick={() => handleReceiveInventory(item.id)}
+                              style={{ backgroundColor: "#2B3068" }}
+                              className="hover:opacity-90 text-white min-h-[36px]"
+                            >
+                              Mark Received
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              style={{ borderColor: "#2B3068", color: "#2B3068" }}
+                              className="hover:bg-slate-50 min-h-[36px]"
+                              onClick={() => handleEditInventory(item)}
+                            >
+                              Edit
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {pendingItems.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center text-gray-500 py-12">
+                          <Package className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                          <p className="text-lg font-medium">No pending orders</p>
+                          <p className="text-sm">All orders have been received</p>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Mobile Card View */}
+              <div className="lg:hidden">
+                {pendingItems.length > 0 ? (
+                  <div className="divide-y divide-gray-200">
+                    {pendingItems.map((item) => (
+                      <div key={item.id} className="p-4 sm:p-6 hover:bg-gray-50 transition-colors">
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h3 className="font-semibold text-[#2B3068] text-base sm:text-lg">{item.poNumber}</h3>
+                              <p className="text-sm text-gray-600">{item.productName}</p>
+                            </div>
+                            <Badge variant={item.purchaseType === "gas" ? "default" : "secondary"}>
+                              {item.purchaseType}
+                            </Badge>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div>
+                              <span className="font-medium text-gray-700">Supplier:</span>
+                              <span className="ml-2 text-gray-600">{item.supplierName}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-700">Quantity:</span>
+                              <span className="ml-2 text-gray-600">{item.quantity}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-700">Unit Price:</span>
+                              <span className="ml-2 text-gray-600">AED {item.unitPrice.toFixed(2)}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-700">Total:</span>
+                              <span className="ml-2 font-semibold text-[#2B3068]">AED {item.totalAmount.toFixed(2)}</span>
+                            </div>
+                          </div>
+                          <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                            <Button
+                              size="sm"
+                              onClick={() => handleReceiveInventory(item.id)}
+                              style={{ backgroundColor: "#2B3068" }}
+                              className="w-full sm:w-auto hover:opacity-90 text-white min-h-[44px]"
+                            >
+                              Mark Received
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              style={{ borderColor: "#2B3068", color: "#2B3068" }}
+                              className="w-full sm:w-auto hover:bg-slate-50 min-h-[44px]"
+                              onClick={() => handleEditInventory(item)}
+                            >
+                              Edit
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12 px-4">
+                    <div className="text-gray-500">
+                      <Package className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-4 opacity-50" />
+                      <p className="text-base sm:text-lg font-medium">No pending orders</p>
+                      <p className="text-sm">All orders have been received</p>
+                    </div>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="received">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2" style={{ color: "#2B3068" }}>
-                <Package className="w-5 h-5" />
-                Received Inventory
-              </CardTitle>
+          <Card className="border-0 shadow-xl rounded-xl sm:rounded-2xl overflow-hidden">
+            <CardHeader className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] text-white p-4 sm:p-6">
+              <CardTitle className="text-lg sm:text-xl lg:text-2xl font-bold">Received Inventory Items</CardTitle>
             </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>PO Number</TableHead>
-                    <TableHead>Product</TableHead>
-                    <TableHead>Supplier</TableHead>
-                    <TableHead>Purchase Date</TableHead>
-                    <TableHead>Qty</TableHead>
-                    <TableHead>Total Amount (AED)</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {receivedItems.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.poNumber}</TableCell>
-                      <TableCell>{item.productName}</TableCell>
-                      <TableCell>{item.supplierName}</TableCell>
-                      <TableCell>{new Date(item.purchaseDate).toLocaleDateString()}</TableCell>
-                      <TableCell>{item.quantity}</TableCell>
-                      <TableCell>AED {item.totalAmount.toFixed(2)}</TableCell>
-                      <TableCell>
-                        <Badge variant="default" className="bg-green-100 text-green-800">
-                          Received
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          style={{ borderColor: "#2B3068", color: "#2B3068" }}
-                          className="hover:bg-slate-50"
-                          onClick={() => handleEditInventory(item)}
-                        >
-                          Edit
-                        </Button>
-                      </TableCell>
+            <CardContent className="p-0">
+              {/* Desktop Table View */}
+              <div className="hidden lg:block overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-gray-50 border-b-2 border-gray-200">
+                      <TableHead className="font-bold text-gray-700 p-4">PO Number</TableHead>
+                      <TableHead className="font-bold text-gray-700 p-4">Product</TableHead>
+                      <TableHead className="font-bold text-gray-700 p-4">Supplier</TableHead>
+                      <TableHead className="font-bold text-gray-700 p-4">Type</TableHead>
+                      <TableHead className="font-bold text-gray-700 p-4">Quantity</TableHead>
+                      <TableHead className="font-bold text-gray-700 p-4">Unit Price</TableHead>
+                      <TableHead className="font-bold text-gray-700 p-4">Total</TableHead>
+                      <TableHead className="font-bold text-gray-700 p-4">Actions</TableHead>
                     </TableRow>
-                  ))}
-                  {receivedItems.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center text-gray-500">
-                        No received inventory items
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {receivedItems.map((item) => (
+                      <TableRow key={item.id} className="hover:bg-gray-50 transition-colors border-b border-gray-100">
+                        <TableCell className="font-semibold text-[#2B3068] p-4">{item.poNumber}</TableCell>
+                        <TableCell className="p-4">{item.productName}</TableCell>
+                        <TableCell className="p-4">{item.supplierName}</TableCell>
+                        <TableCell className="p-4">
+                          <Badge variant={item.purchaseType === "gas" ? "default" : "secondary"}>
+                            {item.purchaseType}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="p-4">{item.quantity}</TableCell>
+                        <TableCell className="p-4">AED {item.unitPrice.toFixed(2)}</TableCell>
+                        <TableCell className="p-4 font-semibold">AED {item.totalAmount.toFixed(2)}</TableCell>
+                        <TableCell className="p-4">
+                          <div className="flex space-x-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              style={{ borderColor: "#2B3068", color: "#2B3068" }}
+                              className="hover:bg-slate-50 min-h-[36px]"
+                              onClick={() => handleEditInventory(item)}
+                            >
+                              Edit
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {receivedItems.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center text-gray-500 py-12">
+                          <Package className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                          <p className="text-lg font-medium">No received items</p>
+                          <p className="text-sm">All items are pending</p>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Mobile Card View */}
+              <div className="lg:hidden">
+                {receivedItems.length > 0 ? (
+                  <div className="divide-y divide-gray-200">
+                    {receivedItems.map((item) => (
+                      <div key={item.id} className="p-4 sm:p-6 hover:bg-gray-50 transition-colors">
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h3 className="font-semibold text-[#2B3068] text-base sm:text-lg">{item.poNumber}</h3>
+                              <p className="text-sm text-gray-600">{item.productName}</p>
+                            </div>
+                            <Badge variant={item.purchaseType === "gas" ? "default" : "secondary"}>
+                              {item.purchaseType}
+                            </Badge>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div>
+                              <span className="font-medium text-gray-700">Supplier:</span>
+                              <span className="ml-2 text-gray-600">{item.supplierName}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-700">Quantity:</span>
+                              <span className="ml-2 text-gray-600">{item.quantity}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-700">Unit Price:</span>
+                              <span className="ml-2 text-gray-600">AED {item.unitPrice.toFixed(2)}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-700">Total:</span>
+                              <span className="ml-2 font-semibold text-[#2B3068]">AED {item.totalAmount.toFixed(2)}</span>
+                            </div>
+                          </div>
+                          <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              style={{ borderColor: "#2B3068", color: "#2B3068" }}
+                              className="w-full sm:w-auto hover:bg-slate-50 min-h-[44px]"
+                              onClick={() => handleEditInventory(item)}
+                            >
+                              Edit
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12 px-4">
+                    <div className="text-gray-500">
+                      <Package className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-4 opacity-50" />
+                      <p className="text-base sm:text-lg font-medium">No received items</p>
+                      <p className="text-sm">All items are pending</p>
+                    </div>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -301,10 +458,10 @@ export function Inventory() {
 
       {/* Edit Inventory Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-[95vw] max-w-[500px] max-h-[90vh] overflow-y-auto mx-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2" style={{ color: "#2B3068" }}>
-              <Edit className="w-5 h-5" />
+            <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl" style={{ color: "#2B3068" }}>
+              <Edit className="w-4 h-4 sm:w-5 sm:h-5" />
               Edit Inventory Item
             </DialogTitle>
           </DialogHeader>
@@ -319,18 +476,19 @@ export function Inventory() {
               
               <div className="space-y-3">
                 <div>
-                  <Label htmlFor="edit-quantity">Quantity</Label>
+                  <Label htmlFor="edit-quantity" className="text-sm font-medium">Quantity</Label>
                   <Input
                     id="edit-quantity"
                     type="number"
                     value={editFormData.quantity}
                     onChange={(e) => setEditFormData({ ...editFormData, quantity: e.target.value })}
                     min="1"
+                    className="h-11 sm:h-12 text-sm sm:text-base"
                   />
                 </div>
                 
                 <div>
-                  <Label htmlFor="edit-unitPrice">Unit Price (AED)</Label>
+                  <Label htmlFor="edit-unitPrice" className="text-sm font-medium">Unit Price (AED)</Label>
                   <Input
                     id="edit-unitPrice"
                     type="number"
@@ -338,6 +496,7 @@ export function Inventory() {
                     value={editFormData.unitPrice}
                     onChange={(e) => setEditFormData({ ...editFormData, unitPrice: e.target.value })}
                     min="0.01"
+                    className="h-11 sm:h-12 text-sm sm:text-base"
                   />
                 </div>
                 
@@ -352,11 +511,11 @@ export function Inventory() {
                 )}
               </div>
               
-              <div className="flex gap-2 pt-4">
+              <div className="flex flex-col sm:flex-row gap-3 pt-4">
                 <Button
                   onClick={handleSaveEdit}
                   style={{ backgroundColor: "#2B3068" }}
-                  className="flex-1 hover:opacity-90"
+                  className="w-full sm:flex-1 hover:opacity-90 min-h-[44px]"
                   disabled={!editFormData.quantity || !editFormData.unitPrice}
                 >
                   Save Changes
@@ -364,7 +523,7 @@ export function Inventory() {
                 <Button
                   variant="outline"
                   onClick={handleCancelEdit}
-                  className="flex-1"
+                  className="w-full sm:flex-1 min-h-[44px]"
                 >
                   Cancel
                 </Button>

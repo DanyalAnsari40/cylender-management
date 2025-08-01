@@ -142,165 +142,159 @@ export function CustomerManagement() {
   }
 
   return (
-    <div className="space-y-8 p-6">
-      {/* Error Alert */}
+    <div className="pt-16 lg:pt-0 space-y-4 sm:space-y-6">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] rounded-xl sm:rounded-2xl p-4 sm:p-6 lg:p-8 text-white">
+        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2">Customer Management</h1>
+        <p className="text-white/80 text-sm sm:text-base lg:text-lg">Manage your customer database</p>
+      </div>
+
+      {/* Error Display */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">
-          <AlertCircle className="w-5 h-5 text-red-500" />
-          <p className="text-red-700">{error}</p>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setError("")}
-            className="ml-auto text-red-600 border-red-300"
-          >
-            Dismiss
-          </Button>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4 flex items-center gap-3">
+          <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red-500 flex-shrink-0" />
+          <p className="text-red-700 text-sm sm:text-base">{error}</p>
         </div>
       )}
 
-      {/* Header Section */}
-      <div className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] rounded-2xl p-8 text-white shadow-xl">
-        <div className="flex justify-between items-center">
+      {/* Add Customer Button */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex items-center gap-3">
+          <Users className="w-6 h-6 sm:w-8 sm:h-8 text-[#2B3068]" />
           <div>
-            <h1 className="text-4xl font-bold mb-2 flex items-center gap-3">
-              <Users className="w-10 h-10" />
-              Customer Management
-            </h1>
-            <p className="text-white/80 text-lg">Manage your customer database</p>
+            <h2 className="text-xl sm:text-2xl font-bold text-[#2B3068]">Customers</h2>
+            <p className="text-gray-600 text-sm sm:text-base">Manage customer information</p>
           </div>
+        </div>
+        <div className="w-full sm:w-auto">
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button
+                onClick={resetForm}
+                className="w-full sm:w-auto bg-[#2B3068] hover:bg-[#1a1f4a] text-white px-4 sm:px-6 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 min-h-[44px]"
+              >
+                <Plus className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
+                Add Customer
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="w-[95vw] max-w-[600px] max-h-[90vh] overflow-y-auto mx-auto">
+              <DialogHeader>
+                <DialogTitle className="text-xl sm:text-2xl font-bold text-[#2B3068]">
+                  {editingCustomer ? "Edit Customer" : "Add New Customer"}
+                </DialogTitle>
+              </DialogHeader>
 
-          <div className="flex gap-2">
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button
-                  onClick={resetForm}
-                  className="bg-white text-[#2B3068] hover:bg-white/90 font-semibold px-8 py-4 text-lg rounded-xl shadow-lg transition-all duration-300 hover:scale-105"
-                >
-                  <Plus className="w-5 h-5 mr-2" />
-                  Add Customer
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader className="pb-6">
-                  <DialogTitle className="text-2xl font-bold text-[#2B3068] flex items-center gap-2">
-                    <Users className="w-6 h-6" />
-                    {editingCustomer ? "Edit Customer" : "Add New Customer"}
-                  </DialogTitle>
-                </DialogHeader>
-
-                {error && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-2 mb-4">
-                    <AlertCircle className="w-4 h-4 text-red-500" />
-                    <p className="text-red-700 text-sm">{error}</p>
-                  </div>
-                )}
-
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-3">
-                      <Label htmlFor="name" className="text-sm font-semibold text-gray-700">
-                        Customer Name *
-                      </Label>
-                      <Input
-                        id="name"
-                        placeholder="Enter customer name"
-                        value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        className="h-12 border-2 border-gray-200 rounded-xl focus:border-[#2B3068] transition-colors"
-                        required
-                      />
-                    </div>
-
-                    <div className="space-y-3">
-                      <Label htmlFor="trNumber" className="text-sm font-semibold text-gray-700">
-                        TR Number *
-                      </Label>
-                      <Input
-                        id="trNumber"
-                        placeholder="Enter TR number"
-                        value={formData.trNumber}
-                        onChange={(e) => setFormData({ ...formData, trNumber: e.target.value })}
-                        className="h-12 border-2 border-gray-200 rounded-xl focus:border-[#2B3068] transition-colors"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-3">
-                      <Label htmlFor="phone" className="text-sm font-semibold text-gray-700">
-                        Phone Number *
-                      </Label>
-                      <Input
-                        id="phone"
-                        type="tel"
-                        placeholder="Enter phone number"
-                        value={formData.phone}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                        className="h-12 border-2 border-gray-200 rounded-xl focus:border-[#2B3068] transition-colors"
-                        required
-                      />
-                    </div>
-
-                    <div className="space-y-3">
-                      <Label htmlFor="email" className="text-sm font-semibold text-gray-700">
-                        Email Address *
-                      </Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="Enter email address"
-                        value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        className="h-12 border-2 border-gray-200 rounded-xl focus:border-[#2B3068] transition-colors"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <Label htmlFor="address" className="text-sm font-semibold text-gray-700">
-                      Address *
+              <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="name" className="text-sm font-medium text-gray-700">
+                      Customer Name *
                     </Label>
                     <Input
-                      id="address"
-                      placeholder="Enter full address"
-                      value={formData.address}
-                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                      className="h-12 border-2 border-gray-200 rounded-xl focus:border-[#2B3068] transition-colors"
+                      id="name"
+                      type="text"
+                      placeholder="Enter customer name"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       required
+                      className="h-11 sm:h-12 border-gray-300 focus:border-[#2B3068] focus:ring-[#2B3068] text-sm sm:text-base"
                     />
                   </div>
-
+                  <div className="space-y-2">
+                    <Label htmlFor="trNumber" className="text-sm font-medium text-gray-700">
+                      TR Number *
+                    </Label>
+                    <Input
+                      id="trNumber"
+                      type="text"
+                      placeholder="Enter TR number"
+                      value={formData.trNumber}
+                      onChange={(e) => setFormData({ ...formData, trNumber: e.target.value })}
+                      required
+                      className="h-11 sm:h-12 border-gray-300 focus:border-[#2B3068] focus:ring-[#2B3068] text-sm sm:text-base"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phone" className="text-sm font-medium text-gray-700">
+                      Phone Number *
+                    </Label>
+                    <Input
+                      id="phone"
+                      type="tel"
+                      placeholder="Enter phone number"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      required
+                      className="h-11 sm:h-12 border-gray-300 focus:border-[#2B3068] focus:ring-[#2B3068] text-sm sm:text-base"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email" className="text-sm font-medium text-gray-700">
+                      Email Address *
+                    </Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="Enter email address"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      required
+                      className="h-11 sm:h-12 border-gray-300 focus:border-[#2B3068] focus:ring-[#2B3068] text-sm sm:text-base"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="address" className="text-sm font-medium text-gray-700">
+                    Address *
+                  </Label>
+                  <Input
+                    id="address"
+                    type="text"
+                    placeholder="Enter full address"
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    required
+                    className="h-11 sm:h-12 border-gray-300 focus:border-[#2B3068] focus:ring-[#2B3068] text-sm sm:text-base"
+                  />
+                </div>
+                <div className="flex flex-col sm:flex-row justify-end gap-3 sm:gap-4 pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsDialogOpen(false)}
+                    className="w-full sm:w-auto px-4 sm:px-6 py-3 border-gray-300 text-gray-700 hover:bg-gray-50 min-h-[44px]"
+                  >
+                    Cancel
+                  </Button>
                   <Button
                     type="submit"
-                    className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] hover:from-[#1a1f4a] hover:to-[#2B3068] rounded-xl shadow-lg transition-all duration-300"
                     disabled={submitting}
+                    className="w-full sm:w-auto bg-[#2B3068] hover:bg-[#1a1f4a] text-white px-4 sm:px-6 py-3 disabled:opacity-50 min-h-[44px]"
                   >
                     {submitting ? (
                       <>
-                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                        <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 mr-2 animate-spin" />
                         {editingCustomer ? "Updating..." : "Adding..."}
                       </>
                     ) : (
                       <>{editingCustomer ? "Update Customer" : "Add Customer"}</>
                     )}
                   </Button>
-                </form>
-              </DialogContent>
-            </Dialog>
-          </div>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
-      {/* Customers Table */}
-      <Card className="border-0 shadow-xl rounded-2xl overflow-hidden">
-        <CardHeader className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] text-white p-6">
-          <CardTitle className="text-2xl font-bold">Customers List ({Array.isArray(customers) ? customers.length : 0})</CardTitle>
+      {/* Customers List */}
+      <Card className="border-0 shadow-xl rounded-xl sm:rounded-2xl overflow-hidden">
+        <CardHeader className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] text-white p-4 sm:p-6">
+          <CardTitle className="text-lg sm:text-xl lg:text-2xl font-bold">Customers List ({Array.isArray(customers) ? customers.length : 0})</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
+          {/* Desktop Table View */}
+          <div className="hidden lg:block overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="bg-gray-50 border-b-2 border-gray-200">
@@ -326,7 +320,7 @@ export function CustomerManagement() {
                           variant="outline"
                           size="sm"
                           onClick={() => handleEdit(customer)}
-                          className="border-[#2B3068] text-[#2B3068] hover:bg-[#2B3068] hover:text-white transition-colors"
+                          className="border-[#2B3068] text-[#2B3068] hover:bg-[#2B3068] hover:text-white transition-colors min-h-[36px]"
                         >
                           <Edit className="w-4 h-4" />
                         </Button>
@@ -334,7 +328,7 @@ export function CustomerManagement() {
                           variant="outline"
                           size="sm"
                           onClick={() => handleDelete(customer._id)}
-                          className="border-red-500 text-red-500 hover:bg-red-500 hover:text-white transition-colors"
+                          className="border-red-500 text-red-500 hover:bg-red-500 hover:text-white transition-colors min-h-[36px]"
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -355,6 +349,66 @@ export function CustomerManagement() {
                 )}
               </TableBody>
             </Table>
+          </div>
+
+          {/* Mobile Card View */}
+          <div className="lg:hidden">
+            {Array.isArray(customers) && customers.length > 0 ? (
+              <div className="divide-y divide-gray-200">
+                {customers.map((customer) => (
+                  <div key={customer._id} className="p-4 sm:p-6 hover:bg-gray-50 transition-colors">
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="font-semibold text-[#2B3068] text-base sm:text-lg">{customer.name}</h3>
+                          <p className="text-sm text-gray-600">TR: {customer.trNumber}</p>
+                        </div>
+                        <div className="flex space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEdit(customer)}
+                            className="border-[#2B3068] text-[#2B3068] hover:bg-[#2B3068] hover:text-white transition-colors min-h-[44px] min-w-[44px]"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDelete(customer._id)}
+                            className="border-red-500 text-red-500 hover:bg-red-500 hover:text-white transition-colors min-h-[44px] min-w-[44px]"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                        <div>
+                          <span className="font-medium text-gray-700">Phone:</span>
+                          <span className="ml-2 text-gray-600">{customer.phone}</span>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-700">Email:</span>
+                          <span className="ml-2 text-gray-600 break-all">{customer.email}</span>
+                        </div>
+                      </div>
+                      <div className="text-sm">
+                        <span className="font-medium text-gray-700">Address:</span>
+                        <span className="ml-2 text-gray-600">{customer.address}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 px-4">
+                <div className="text-gray-500">
+                  <Users className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-4 opacity-50" />
+                  <p className="text-base sm:text-lg font-medium">No customers found</p>
+                  <p className="text-sm">Add your first customer to get started</p>
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
