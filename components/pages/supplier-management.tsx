@@ -306,7 +306,7 @@ export function SupplierManagement() {
 
       {/* Suppliers Table */}
       <Card className="border-0 shadow-xl rounded-2xl overflow-hidden">
-        <CardHeader className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6">
+        <CardHeader className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] text-white p-6">
           <CardTitle className="text-2xl font-bold">Supplier List ({suppliers.length})</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
