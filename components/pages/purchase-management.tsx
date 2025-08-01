@@ -28,10 +28,18 @@ interface PurchaseOrder {
   poNumber: string
 }
 
+interface Product {
+  _id: string
+  name: string
+  costPrice: number
+  currentStock: number
+  category: "gas" | "cylinder"
+}
+
 export function PurchaseManagement() {
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([])
   const [suppliers, setSuppliers] = useState<any[]>([])
-  const [products, setProducts] = useState<any[]>([])
+  const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -158,6 +166,9 @@ export function PurchaseManagement() {
         response = await purchaseOrdersAPI.update(editingOrder._id, orderData)
       } else {
         response = await purchaseOrdersAPI.create(orderData)
+        
+        // Stock will be updated when item is received in inventory management
+        // No longer updating stock immediately upon purchase order creation
       }
 
       // Refresh the data to get the latest from database
@@ -203,7 +214,47 @@ export function PurchaseManagement() {
   const handleDelete = async (id: string) => {
     if (confirm("Are you sure you want to delete this purchase order?")) {
       try {
-        await purchaseOrdersAPI.delete(id)
+        // Find the purchase order to get its details before deletion
+        const orderToDelete = purchaseOrders.find(order => order._id === id)
+        
+        if (orderToDelete) {
+          console.log("🗑️ Deleting purchase order:", orderToDelete.poNumber)
+          console.log("Order quantity to remove from stock:", orderToDelete.quantity)
+          console.log("Product ID:", orderToDelete.product?._id)
+          
+          // Delete the purchase order first
+          await purchaseOrdersAPI.delete(id)
+          
+          // Update product stock by removing the deleted order's quantity
+          try {
+            if (orderToDelete.product?._id && orderToDelete.quantity) {
+              // Get the latest product data from database
+              const latestProductsResponse = await productsAPI.getAll()
+              const latestProducts = latestProductsResponse.data
+              const latestProduct = latestProducts.find((p: Product) => p._id === orderToDelete.product._id)
+              
+              if (latestProduct) {
+                const currentStock = latestProduct.currentStock || 0
+                const updatedStock = Math.max(0, currentStock - orderToDelete.quantity) // Prevent negative stock
+                
+                console.log(`📊 Stock reduction: ${currentStock} - ${orderToDelete.quantity} = ${updatedStock}`)
+                
+                await productsAPI.update(orderToDelete.product._id, {
+                  ...latestProduct,
+                  currentStock: updatedStock
+                })
+                
+                console.log(`✅ Reduced ${latestProduct.name} stock from ${currentStock} to ${updatedStock}`)
+              } else {
+                console.error("Product not found in latest database fetch")
+              }
+            }
+          } catch (stockError: any) {
+            console.error("❌ Stock reduction failed:", stockError)
+            // Don't fail the deletion if stock update fails
+          }
+        }
+        
         // Refresh the data to get the latest from database
         await fetchData()
       } catch (error: any) {

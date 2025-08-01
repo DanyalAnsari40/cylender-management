@@ -34,7 +34,6 @@ export function ProductManagement() {
     cylinderType: "large" as "large" | "small",
     costPrice: "",
     leastPrice: "",
-    currentStock: "",
   })
 
   useEffect(() => {
@@ -63,7 +62,7 @@ export function ProductManagement() {
         cylinderType: formData.category === "cylinder" ? formData.cylinderType : undefined,
         costPrice: Number.parseFloat(formData.costPrice),
         leastPrice: Number.parseFloat(formData.leastPrice),
-        currentStock: Number.parseInt(formData.currentStock) || 0,
+        currentStock: 0,
       }
 
       if (editingProduct) {
@@ -89,7 +88,6 @@ export function ProductManagement() {
       cylinderType: "large",
       costPrice: "",
       leastPrice: "",
-      currentStock: "",
     })
     setEditingProduct(null)
   }
@@ -102,7 +100,6 @@ export function ProductManagement() {
       cylinderType: product.cylinderType || "large",
       costPrice: product.costPrice.toString(),
       leastPrice: product.leastPrice.toString(),
-      currentStock: product.currentStock.toString(),
     })
     setIsDialogOpen(true)
   }
@@ -140,16 +137,16 @@ export function ProductManagement() {
 
           <div className="w-full sm:w-auto flex-shrink-0">
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button
-                  onClick={resetForm}
-                  className="w-full sm:w-auto bg-white text-[#2B3068] hover:bg-white/90 font-semibold px-4 sm:px-6 lg:px-8 py-3 sm:py-4 text-sm sm:text-base lg:text-lg rounded-xl shadow-lg transition-all duration-300 hover:scale-105 min-h-[44px]"
-                >
-                  <Plus className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
-                  Add Product
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="w-[95vw] max-w-[500px] max-h-[90vh] overflow-y-auto mx-auto">
+                <DialogTrigger asChild>
+                  <Button
+                    onClick={resetForm}
+                    className="w-full sm:w-auto bg-white text-[#2B3068] hover:bg-white/90 font-semibold px-4 sm:px-6 lg:px-8 py-3 sm:py-4 text-sm sm:text-base lg:text-lg rounded-xl shadow-lg transition-all duration-300 hover:scale-105 min-h-[44px]"
+                  >
+                    <Plus className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
+                    Add Product
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="w-[95vw] max-w-[500px] max-h-[90vh] overflow-y-auto mx-auto">
                 <DialogHeader>
                   <DialogTitle className="text-lg sm:text-xl font-bold text-[#2B3068]">
                     {editingProduct ? "Edit Product" : "Add New Product"}
@@ -228,16 +225,7 @@ export function ProductManagement() {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="currentStock" className="text-sm font-medium">Current Stock</Label>
-                    <Input
-                      id="currentStock"
-                      type="number"
-                      value={formData.currentStock}
-                      onChange={(e) => setFormData({ ...formData, currentStock: e.target.value })}
-                      className="h-11 sm:h-12 text-sm sm:text-base"
-                    />
-                  </div>
+
 
                   <div className="flex flex-col sm:flex-row gap-3 pt-4">
                     <Button
@@ -265,8 +253,8 @@ export function ProductManagement() {
                     </Button>
                   </div>
                 </form>
-              </DialogContent>
-            </Dialog>
+                </DialogContent>
+              </Dialog>
           </div>
         </div>
       </div>

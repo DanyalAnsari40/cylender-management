@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Package, Loader2, Edit } from "lucide-react"
-import { purchaseOrdersAPI, inventoryAPI } from "@/lib/api"
+import { purchaseOrdersAPI, inventoryAPI, productsAPI } from "@/lib/api"
 
 interface InventoryItem {
   id: string
@@ -23,6 +23,15 @@ interface InventoryItem {
   totalAmount: number
   status: "pending" | "received"
   purchaseType: "gas" | "cylinder"
+}
+
+interface Product {
+  _id: string
+  name: string
+  category: "gas" | "cylinder"
+  costPrice: number
+  leastPrice: number
+  currentStock: number
 }
 
 export function Inventory() {
@@ -75,11 +84,48 @@ export function Inventory() {
     try {
       console.log("Updating inventory status to received for ID:", id)
       
+      // Get the inventory item details before updating status
+      const itemToReceive = inventory.find(item => item.id === id)
+      if (!itemToReceive) {
+        setError("Inventory item not found")
+        return
+      }
+      
       // Update status in database
       const response = await inventoryAPI.receiveInventory(id)
       console.log("Inventory update response:", response)
       
       if (response.data.success) {
+        // Now update the product stock since the item has been received
+        try {
+          // Get the latest product data to find the product by name
+          const productsResponse = await productsAPI.getAll()
+          const products = productsResponse.data || []
+          
+          // Find the product by name (since inventory items store productName, not productId)
+          const product = products.find((p: Product) => p.name === itemToReceive.productName)
+          
+          if (product) {
+            const currentStock = product.currentStock || 0
+            const newQuantity = itemToReceive.quantity
+            const updatedStock = currentStock + newQuantity
+            
+            // Update the product stock
+            await productsAPI.update(product._id, {
+              ...product,
+              currentStock: updatedStock
+            })
+            
+            console.log(`✅ Updated ${product.name} stock from ${currentStock} to ${updatedStock} (added ${newQuantity} units from received inventory)`)
+          } else {
+            console.error(`❌ Product not found for inventory item: ${itemToReceive.productName}`)
+            setError(`Product "${itemToReceive.productName}" not found for stock update`)
+          }
+        } catch (stockError: any) {
+          console.error("❌ Failed to update product stock:", stockError)
+          setError(`Inventory received but failed to update stock: ${stockError.message}`)
+        }
+        
         // Update local state
         const updatedInventory = inventory.map((item) => 
           item.id === id ? { ...item, status: "received" as const } : item
@@ -108,20 +154,58 @@ export function Inventory() {
     if (!editingItem || !editFormData.quantity || !editFormData.unitPrice) return
 
     try {
-      const quantity = Number.parseFloat(editFormData.quantity)
+      const newQuantity = Number.parseFloat(editFormData.quantity)
       const unitPrice = Number.parseFloat(editFormData.unitPrice)
+      const oldQuantity = editingItem.quantity
       
-      console.log("Updating inventory item:", editingItem.id, { quantity, unitPrice })
+      console.log("Updating inventory item:", editingItem.id, { quantity: newQuantity, unitPrice })
+      console.log("Quantity change:", oldQuantity, "→", newQuantity)
       
       // Update in database
       const response = await inventoryAPI.updateItem(editingItem.id, {
-        quantity,
+        quantity: newQuantity,
         unitPrice
       })
       
       console.log("Inventory update response:", response)
       
       if (response.data.success) {
+        // If this is a received item and quantity changed, update product stock
+        if (editingItem.status === "received" && newQuantity !== oldQuantity) {
+          try {
+            console.log("📦 Updating product stock for received inventory item edit...")
+            
+            // Get the latest product data
+            const productsResponse = await productsAPI.getAll()
+            const products = productsResponse.data || []
+            
+            // Find the product by name
+            const product = products.find((p: Product) => p.name === editingItem.productName)
+            
+            if (product) {
+              const currentStock = product.currentStock || 0
+              const quantityDifference = newQuantity - oldQuantity
+              const updatedStock = currentStock + quantityDifference
+              
+              console.log(`📊 Stock adjustment: ${currentStock} + (${newQuantity} - ${oldQuantity}) = ${updatedStock}`)
+              
+              // Update the product stock
+              await productsAPI.update(product._id, {
+                ...product,
+                currentStock: Math.max(0, updatedStock) // Prevent negative stock
+              })
+              
+              console.log(`✅ Updated ${product.name} stock from ${currentStock} to ${Math.max(0, updatedStock)} (${quantityDifference > 0 ? 'added' : 'removed'} ${Math.abs(quantityDifference)} units)`);
+            } else {
+              console.error(`❌ Product not found for inventory item: ${editingItem.productName}`)
+              setError(`Product "${editingItem.productName}" not found for stock update`)
+            }
+          } catch (stockError: any) {
+            console.error("❌ Failed to update product stock:", stockError)
+            setError(`Inventory updated but failed to update stock: ${stockError.message}`)
+          }
+        }
+        
         // Update local state with response data
         const updatedItem = response.data.data
         const updatedInventory = inventory.map((item) =>
