@@ -56,6 +56,9 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
   const [statusFilter, setStatusFilter] = useState("all")
   const [stockAssignments, setStockAssignments] = useState<any[]>([])
   const [notification, setNotification] = useState<{ message: string; visible: boolean }>({ message: "", visible: false })
+  const [isProductListDialogOpen, setIsProductListDialogOpen] = useState(false)
+  const [selectedEmployeeProducts, setSelectedEmployeeProducts] = useState<any[]>([])
+  const [updateNotification, setUpdateNotification] = useState<{ message: string; visible: boolean; type: 'success' | 'warning' }>({ message: "", visible: false, type: 'success' })
 
   // Form state
   const [formData, setFormData] = useState({
@@ -170,15 +173,89 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
     try {
       if (!selectedEmployee) return
 
-      const assignmentData = {
-        employee: selectedEmployee._id,
-        product: stockFormData.productId,
-        quantity: stockFormData.quantity,
-        assignedBy: user.id,
-        notes: stockFormData.notes,
-      }
+      // Check if this product is already assigned to this employee
+      const existingAssignment = stockAssignments.find(
+        (assignment) => 
+          assignment.employee?._id === selectedEmployee._id && 
+          assignment.product?._id === stockFormData.productId &&
+          assignment.status === 'assigned'
+      )
 
-      await stockAssignmentsAPI.create(assignmentData)
+      if (existingAssignment) {
+        // Product already assigned - update the quantity instead
+        const updatedQuantity = existingAssignment.quantity + stockFormData.quantity
+        
+        // Update the existing assignment
+        await fetch(`/api/stock-assignments/${existingAssignment._id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            quantity: updatedQuantity,
+            notes: stockFormData.notes || existingAssignment.notes,
+          }),
+        })
+
+        // Get product name for notifications
+        const product = products.find(p => p._id === stockFormData.productId)
+        const productName = product?.name || 'Product'
+
+        // Show success notification
+        setUpdateNotification({
+          message: 'Stock updated successfully!',
+          visible: true,
+          type: 'success'
+        })
+
+        // Auto-hide notification after 3 seconds
+        setTimeout(() => {
+          setUpdateNotification({ message: '', visible: false, type: 'success' })
+        }, 3000)
+
+        // Send notification to employee
+        await fetch('/api/notifications', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: selectedEmployee._id,
+            type: 'stock_assignment',
+            message: `${productName} stock is added in your inventory. New quantity: ${updatedQuantity}`,
+            read: false,
+          }),
+        })
+      } else {
+        // No existing assignment - create new one
+        const assignmentData = {
+          employee: selectedEmployee._id,
+          product: stockFormData.productId,
+          quantity: stockFormData.quantity,
+          assignedBy: user.id,
+          notes: stockFormData.notes,
+        }
+
+        await stockAssignmentsAPI.create(assignmentData)
+
+        // Get product name for notification
+        const product = products.find(p => p._id === stockFormData.productId)
+        const productName = product?.name || 'Product'
+
+        // Send notification to employee
+        await fetch('/api/notifications', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: selectedEmployee._id,
+            type: 'stock_assignment',
+            message: `${productName} has been assigned to your inventory. Quantity: ${stockFormData.quantity}`,
+            read: false,
+          }),
+        })
+      }
 
       // Reset form and close dialog
       setStockFormData({
@@ -194,7 +271,16 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
       await fetchStockAssignments()
     } catch (error: any) {
       console.error("Failed to assign stock:", error)
-      alert(error.response?.data?.error || "Failed to assign stock")
+      setUpdateNotification({
+        message: error.response?.data?.error || "Failed to assign stock",
+        visible: true,
+        type: 'warning'
+      })
+      
+      // Auto-hide error notification after 5 seconds
+      setTimeout(() => {
+        setUpdateNotification({ message: '', visible: false, type: 'success' })
+      }, 5000)
     }
   }
 
@@ -453,6 +539,7 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
                   <TableHead className="p-2 sm:p-4">Email</TableHead>
                   <TableHead className="p-2 sm:p-4">Phone</TableHead>
                   <TableHead className="p-2 sm:p-4">Status</TableHead>
+                  <TableHead className="p-2 sm:p-4">Product Assigned</TableHead>
                   <TableHead className="p-2 sm:p-4">Assigned Stock</TableHead>
                   <TableHead className="p-2 sm:p-4">Remaining Stock</TableHead>
                   <TableHead className="p-2 sm:p-4">Received Back Stock</TableHead>
@@ -473,6 +560,18 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
                     .filter((a) => a.employee?._id === employee._id && a.status === "returned")
                     .reduce((sum, a) => sum + (a.quantity || 0), 0)
                   
+                  // Get unique products assigned to this employee
+                  const employeeProducts = stockAssignments
+                    .filter((a) => a.employee?._id === employee._id)
+                    .map((a) => a.product?.name)
+                    .filter((name, index, arr) => name && arr.indexOf(name) === index)
+                  
+                  const handleViewProducts = () => {
+                    const employeeAssignments = stockAssignments.filter((a) => a.employee?._id === employee._id)
+                    setSelectedEmployeeProducts(employeeAssignments)
+                    setIsProductListDialogOpen(true)
+                  }
+                  
                   return (
                     <TableRow key={employee._id}>
                       <TableCell className="p-2 sm:p-4 font-medium text-xs sm:text-sm">{employee.name}</TableCell>
@@ -489,6 +588,22 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
                         >
                           {employee.status || "active"}
                         </Badge>
+                      </TableCell>
+                      <TableCell className="p-2 sm:p-4 text-xs sm:text-sm">
+                        {employeeProducts.length === 0 ? (
+                          <span className="text-gray-500">No products assigned</span>
+                        ) : employeeProducts.length === 1 ? (
+                          <span className="font-medium">{employeeProducts[0]}</span>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={handleViewProducts}
+                            className="text-[#2B3068] border-[#2B3068] hover:bg-[#2B3068] hover:text-white text-xs px-2 py-1"
+                          >
+                            See More ({employeeProducts.length})
+                          </Button>
+                        )}
                       </TableCell>
                       <TableCell className="p-2 sm:p-4 text-xs sm:text-sm">{assignedStock}</TableCell>
                       <TableCell className="p-2 sm:p-4 text-xs sm:text-sm">{remainingStock}</TableCell>
@@ -526,7 +641,7 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
                 })}
                 {filteredEmployees.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-gray-500">
+                    <TableCell colSpan={10} className="text-center py-8 text-gray-500">
                       No employees found.
                     </TableCell>
                   </TableRow>
@@ -599,7 +714,72 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Notification Popup */}
+      {/* Product List Dialog */}
+      <Dialog open={isProductListDialogOpen} onOpenChange={setIsProductListDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Products Assigned to Employee</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {selectedEmployeeProducts.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">No products assigned to this employee.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Product Name</TableHead>
+                      <TableHead>Quantity</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Date Assigned</TableHead>
+                      <TableHead>Notes</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {selectedEmployeeProducts.map((assignment, index) => (
+                      <TableRow key={index}>
+                        <TableCell className="font-medium">
+                          {assignment.product?.name || 'Unknown Product'}
+                        </TableCell>
+                        <TableCell>{assignment.quantity}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={assignment.status === 'assigned' ? 'default' : 
+                                   assignment.status === 'received' ? 'secondary' : 'outline'}
+                            className={
+                              assignment.status === 'assigned' ? 'bg-blue-100 text-blue-800' :
+                              assignment.status === 'received' ? 'bg-green-100 text-green-800' :
+                              'bg-gray-100 text-gray-800'
+                            }
+                          >
+                            {assignment.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {assignment.createdAt ? new Date(assignment.createdAt).toLocaleDateString() : 'N/A'}
+                        </TableCell>
+                        <TableCell className="max-w-xs truncate">
+                          {assignment.notes || 'No notes'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end">
+            <Button 
+              variant="outline" 
+              onClick={() => setIsProductListDialogOpen(false)}
+            >
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Stock Return Notification Popup */}
       {notification.visible && (
         <div className="fixed top-4 right-4 z-50 bg-green-500 text-white px-6 py-4 rounded-lg shadow-lg max-w-md">
           <div className="flex items-center gap-2">
@@ -607,6 +787,23 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
             <span className="font-medium">Stock Return Notification</span>
           </div>
           <p className="mt-1 text-sm">{notification.message}</p>
+        </div>
+      )}
+
+      {/* Stock Update Notification Popup */}
+      {updateNotification.visible && (
+        <div className={`fixed top-4 right-4 z-50 px-6 py-4 rounded-lg shadow-lg max-w-md ${
+          updateNotification.type === 'success' 
+            ? 'bg-green-500 text-white' 
+            : 'bg-orange-500 text-white'
+        }`}>
+          <div className="flex items-center gap-2">
+            <CheckCircle className="w-5 h-5" />
+            <span className="font-medium">
+              {updateNotification.type === 'success' ? 'Stock Update' : 'Assignment Notice'}
+            </span>
+          </div>
+          <p className="mt-1 text-sm">{updateNotification.message}</p>
         </div>
       )}
     </div>

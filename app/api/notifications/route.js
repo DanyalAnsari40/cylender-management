@@ -46,3 +46,49 @@ export async function GET(request) {
     );
   }
 }
+
+export async function POST(request) {
+  try {
+    await dbConnect();
+  } catch (error) {
+    console.error("Database connection error:", error);
+    return NextResponse.json(
+      { error: "Database connection failed", details: error.message },
+      { status: 500 }
+    );
+  }
+
+  try {
+    const data = await request.json();
+
+    // Validate required fields
+    if (!data.userId || !data.message) {
+      return NextResponse.json(
+        { error: "userId and message are required" },
+        { status: 400 }
+      );
+    }
+
+    // Create notification
+    const notification = await Notification.create({
+      recipient: data.userId,
+      sender: data.senderId || null,
+      type: data.type || 'general',
+      title: data.title || 'Notification',
+      message: data.message,
+      isRead: data.read || false,
+    });
+
+    const populatedNotification = await Notification.findById(notification._id)
+      .populate("sender", "name")
+      .populate("recipient", "name");
+
+    return NextResponse.json(populatedNotification, { status: 201 });
+  } catch (error) {
+    console.error("Notifications POST error:", error);
+    return NextResponse.json(
+      { error: "Failed to create notification", details: error.message },
+      { status: 500 }
+    );
+  }
+}

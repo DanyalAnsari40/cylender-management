@@ -18,6 +18,8 @@ import { EmployeeDashboard } from "@/components/pages/employee-dashboard"
 import { EmployeeGasSales } from "@/components/pages/employee-gas-sales"
 import { EmployeeCylinderSales } from "@/components/pages/employee-cylinder-sales"
 import { Notifications } from "@/components/pages/notifications"
+import { NotificationPopup } from "@/components/notification-popup"
+import { LogoutConfirmation } from "@/components/logout-confirmation"
 import { authAPI } from "@/lib/api"
 
 interface MainLayoutProps {
@@ -36,12 +38,18 @@ export function MainLayout({ user, onLogout }: MainLayoutProps) {
   const [currentPage, setCurrentPage] = useState("dashboard")
   const [mounted, setMounted] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
+  const [showLogoutConfirmation, setShowLogoutConfirmation] = useState(false)
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  const handleLogout = async () => {
+  const handleLogoutClick = () => {
+    setShowLogoutConfirmation(true)
+  }
+
+  const handleLogoutConfirm = async () => {
+    setShowLogoutConfirmation(false)
     try {
       await authAPI.logout()
     } catch (error) {
@@ -49,6 +57,10 @@ export function MainLayout({ user, onLogout }: MainLayoutProps) {
     } finally {
       onLogout()
     }
+  }
+
+  const handleLogoutCancel = () => {
+    setShowLogoutConfirmation(false)
   }
 
   const renderPage = () => {
@@ -102,10 +114,20 @@ export function MainLayout({ user, onLogout }: MainLayoutProps) {
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full bg-gray-50">
-        <AppSidebar currentPage={currentPage} onPageChange={setCurrentPage} user={user} onLogout={handleLogout} unreadCount={unreadCount} setUnreadCount={setUnreadCount} />
+        <AppSidebar currentPage={currentPage} onPageChange={setCurrentPage} user={user} onLogout={handleLogoutClick} unreadCount={unreadCount} setUnreadCount={setUnreadCount} />
         <main className="flex-1 overflow-auto">
           <div className="pt-16 lg:pt-0 p-3 sm:p-4 lg:p-6 xl:p-8">{renderPage()}</div>
         </main>
+        {/* Global notification popup for employees */}
+        <NotificationPopup user={user} />
+        
+        {/* Logout confirmation popup */}
+        <LogoutConfirmation 
+          isOpen={showLogoutConfirmation}
+          onConfirm={handleLogoutConfirm}
+          onCancel={handleLogoutCancel}
+          userName={user.name}
+        />
       </div>
     </SidebarProvider>
   )

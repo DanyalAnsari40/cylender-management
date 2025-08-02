@@ -194,14 +194,11 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
     }
 
     try {
-      // Map cylinder size from UI to database format
-      const mappedCylinderSize = CYLINDER_SIZE_MAPPING[formData.cylinderSize as keyof typeof CYLINDER_SIZE_MAPPING]
-
       const transactionData = {
         employeeId: user.id,
         type: formData.type,
         customer: formData.customer,
-        cylinderSize: mappedCylinderSize,
+        cylinderSize: formData.cylinderSize,
         quantity: formData.quantity,
         amount: formData.amount,
         depositAmount: formData.depositAmount,
