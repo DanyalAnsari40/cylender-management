@@ -108,8 +108,19 @@ export function EmployeeDashboard({ user, setUnreadCount }: EmployeeDashboardPro
 
   const pendingStock = assignedStock.filter((stock) => stock.status === "assigned")
   const receivedStock = assignedStock.filter((stock) => stock.status === "received")
+  const returnedStock = assignedStock.filter((stock) => stock.status === "returned")
   const unreadNotifications = notifications.filter((n) => !n.isRead)
-  const totalReceivedQuantity = receivedStock.reduce((sum, stock) => sum + (stock.quantity || 0), 0);
+  
+  // Enhanced stock calculations using the new logic
+  const totalAssignedQuantity = assignedStock
+    .filter((stock) => stock.status !== "returned")
+    .reduce((sum, stock) => sum + (stock.quantity || 0), 0)
+  
+  const totalPendingQuantity = pendingStock.reduce((sum, stock) => sum + (stock.quantity || 0), 0)
+  
+  const totalRemainingQuantity = receivedStock.reduce((sum, stock) => sum + (stock.remainingQuantity || stock.quantity || 0), 0)
+  
+  const totalReturnedQuantity = returnedStock.reduce((sum, stock) => sum + (stock.quantity || 0), 0)
 
   if (loading) {
     return (
@@ -132,12 +143,12 @@ export function EmployeeDashboard({ user, setUnreadCount }: EmployeeDashboardPro
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card className="bg-gradient-to-br from-blue-50 to-indigo-100 border-0 shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-700">Assigned Stock</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-700">Total Assigned Stock</CardTitle>
             <Package className="h-5 w-5 text-[#2B3068]" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-[#2B3068]">{assignedStock.length}</div>
-            <p className="text-xs text-gray-600 mt-1">Items assigned to you</p>
+            <div className="text-3xl font-bold text-[#2B3068]">{totalAssignedQuantity}</div>
+            <p className="text-xs text-gray-600 mt-1">Total quantity ever assigned</p>
           </CardContent>
         </Card>
 
@@ -147,30 +158,30 @@ export function EmployeeDashboard({ user, setUnreadCount }: EmployeeDashboardPro
             <AlertCircle className="h-5 w-5 text-orange-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-orange-500">{pendingStock.length}</div>
+            <div className="text-3xl font-bold text-orange-500">{totalPendingQuantity}</div>
             <p className="text-xs text-gray-600 mt-1">Awaiting receipt</p>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-br from-green-50 to-emerald-100 border-0 shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-700">Received Stock</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-700">Remaining Stock</CardTitle>
             <CheckCircle className="h-5 w-5 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-green-500">{receivedStock.length}</div>
-            <p className="text-xs text-gray-600 mt-1">Successfully received</p>
+            <div className="text-3xl font-bold text-green-500">{totalRemainingQuantity}</div>
+            <p className="text-xs text-gray-600 mt-1">Current stock after sales</p>
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-yellow-50 to-yellow-100 border-0 shadow-lg">
+        <Card className="bg-gradient-to-br from-red-50 to-red-100 border-0 shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-700">Total Quantity Received</CardTitle>
-            <Package className="h-5 w-5 text-yellow-500" />
+            <CardTitle className="text-sm font-medium text-gray-700">Returned Stock</CardTitle>
+            <Package className="h-5 w-5 text-red-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-yellow-500">{totalReceivedQuantity}</div>
-            <p className="text-xs text-gray-600 mt-1">Total quantity of all received stock</p>
+            <div className="text-3xl font-bold text-red-500">{totalReturnedQuantity}</div>
+            <p className="text-xs text-gray-600 mt-1">Stock returned to admin</p>
           </CardContent>
         </Card>
       </div>

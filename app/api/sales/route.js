@@ -25,7 +25,7 @@ export async function POST(request) {
     await dbConnect()
 
     const body = await request.json()
-    const { customer, items, totalAmount, paymentMethod, paymentStatus, notes } = body
+    const { customer, items, totalAmount, paymentMethod, paymentStatus, receivedAmount, notes } = body
 
     // Validate required fields
     if (!customer || !items || items.length === 0 || !totalAmount) {
@@ -80,7 +80,8 @@ export async function POST(request) {
       items,
       totalAmount,
       paymentMethod: paymentMethod || "cash",
-      paymentStatus: paymentStatus || "paid",
+      paymentStatus: paymentStatus || "cleared",
+      receivedAmount: receivedAmount || 0,
       notes: notes || "",
     })
 

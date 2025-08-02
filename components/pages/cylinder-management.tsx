@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Plus, Edit, Trash2, Search, Filter, Cylinder, RotateCcw, ArrowDown, ArrowUp } from "lucide-react"
-import { cylindersAPI, customersAPI } from "@/lib/api"
+import { cylindersAPI, customersAPI, productsAPI } from "@/lib/api"
 import { CustomerDropdown } from "@/components/ui/customer-dropdown"
 import { ReceiptDialog } from "@/components/receipt-dialog"
 import { SignatureDialog } from "@/components/signature-dialog"
@@ -52,9 +52,20 @@ interface Customer {
   email?: string
 }
 
+interface Product {
+  _id: string
+  name: string
+  category: "gas" | "cylinder"
+  cylinderType?: "large" | "small"
+  costPrice: number
+  leastPrice: number
+  currentStock: number
+}
+
 export function CylinderManagement() {
   const [transactions, setTransactions] = useState<CylinderTransaction[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
+  const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingTransaction, setEditingTransaction] = useState<CylinderTransaction | null>(null)
@@ -250,6 +261,8 @@ export function CylinderManagement() {
   const [formData, setFormData] = useState({
     type: "deposit" as "deposit" | "refill" | "return",
     customerId: "",
+    productId: "",
+    productName: "",
     cylinderSize: "",
     quantity: 1,
     amount: 0,
@@ -271,40 +284,62 @@ export function CylinderManagement() {
   const fetchData = async () => {
     try {
       setLoading(true)
-      const [transactionsResponse, customersResponse] = await Promise.all([
-        cylindersAPI.getAll(),
-        customersAPI.getAll(),
-      ])
+      
+      // Fetch data with individual error handling
+      let transactionsData = []
+      let customersData = []
+      let productsData = []
+      
+      try {
+        const transactionsResponse = await cylindersAPI.getAll()
+        transactionsData = Array.isArray(transactionsResponse.data?.data) 
+          ? transactionsResponse.data.data 
+          : Array.isArray(transactionsResponse.data) 
+            ? transactionsResponse.data 
+            : Array.isArray(transactionsResponse) 
+              ? transactionsResponse 
+              : []
 
-      console.log('Transactions API Response:', transactionsResponse)
-      console.log('Transactions Response Data:', transactionsResponse?.data)
+      } catch (error) {
+        console.error("Failed to fetch transactions:", error)
+        transactionsData = []
+      }
       
-      // Handle nested data structure: response.data.data (same as customers)
-      const transactionData = Array.isArray(transactionsResponse?.data?.data) 
-        ? transactionsResponse.data.data 
-        : Array.isArray(transactionsResponse?.data) 
-          ? transactionsResponse.data 
-          : Array.isArray(transactionsResponse) 
-            ? transactionsResponse 
-            : []
+      try {
+        const customersResponse = await customersAPI.getAll()
+        customersData = Array.isArray(customersResponse.data?.data) 
+          ? customersResponse.data.data 
+          : Array.isArray(customersResponse.data) 
+            ? customersResponse.data 
+            : Array.isArray(customersResponse) 
+              ? customersResponse 
+              : []
+
+      } catch (error) {
+        console.error("Failed to fetch customers:", error)
+        customersData = []
+      }
       
-      const customerData = Array.isArray(customersResponse?.data?.data) 
-        ? customersResponse.data.data 
-        : Array.isArray(customersResponse?.data) 
-          ? customersResponse.data 
-          : Array.isArray(customersResponse) 
-            ? customersResponse 
-            : []
+      try {
+        const productsResponse = await productsAPI.getAll()
+        // The products API returns data directly, not in a data property
+        const allProducts = productsResponse.data || productsResponse || []
+        productsData = allProducts.filter(
+          (product: Product) => product.category === "cylinder"
+        )
+      } catch (error) {
+        console.error("Failed to fetch products:", error)
+        // Products API might not exist yet, so we'll continue without products
+      }
       
-      console.log('Processed transaction data:', transactionData)
-      console.log('Processed customer data:', customerData)
-      
-      setTransactions(transactionData)
-      setCustomers(customerData)
+      setTransactions(transactionsData)
+      setCustomers(customersData)
+      setProducts(productsData)
     } catch (error) {
       console.error("Failed to fetch data:", error)
       setTransactions([])
       setCustomers([])
+      setProducts([])
     } finally {
       setLoading(false)
     }
@@ -321,17 +356,19 @@ export function CylinderManagement() {
 
       const transactionData = {
         type: formData.type,
-        customer: formData.customerId,
+        customer: formData.customerId, // This will be sent as 'customer' to match API expectation
+        productId: formData.productId,
+        productName: formData.productName,
         cylinderSize: formData.cylinderSize,
-        quantity: formData.quantity,
-        amount: formData.amount,
-        depositAmount: formData.type === "deposit" ? formData.depositAmount : undefined,
-        refillAmount: formData.type === "refill" ? formData.refillAmount : undefined,
-        returnAmount: formData.type === "return" ? formData.returnAmount : undefined,
+        quantity: Number(formData.quantity) || 0,
+        amount: Number(formData.amount) || 0,
+        depositAmount: formData.type === 'deposit' ? Number(formData.amount) : 0,
+        refillAmount: formData.type === 'refill' ? Number(formData.amount) : 0,
+        returnAmount: formData.type === 'return' ? Number(formData.amount) : 0,
         paymentMethod: formData.paymentMethod,
-        cashAmount: formData.paymentMethod === "cash" ? formData.cashAmount : undefined,
-        bankName: formData.paymentMethod === "cheque" ? formData.bankName : undefined,
-        checkNumber: formData.paymentMethod === "cheque" ? formData.checkNumber : undefined,
+        cashAmount: formData.paymentMethod === 'cash' ? Number(formData.cashAmount) : 0,
+        bankName: formData.paymentMethod === 'cheque' ? formData.bankName : undefined,
+        checkNumber: formData.paymentMethod === 'cheque' ? formData.checkNumber : undefined,
         status: formData.status,
         notes: formData.notes,
       }
@@ -368,6 +405,8 @@ export function CylinderManagement() {
     setFormData({
       type: "" as any, // Clear to show placeholder
       customerId: "",
+      productId: "",
+      productName: "", // Added missing productName field
       cylinderSize: "",
       quantity: "" as any, // Clear to show placeholder
       amount: "" as any, // Clear to show placeholder
@@ -392,6 +431,8 @@ export function CylinderManagement() {
     setFormData({
       type: transaction.type,
       customerId: transaction.customer._id,
+      productId: (transaction as any).productId || "",
+      productName: (transaction as any).productName || "",
       cylinderSize: transaction.cylinderSize,
       quantity: transaction.quantity,
       amount: transaction.amount,
@@ -581,14 +622,14 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
     }
   }
 
-  const filteredTransactions = (transactions || []).filter((transaction) => {
+  const filteredTransactions = Array.isArray(transactions) ? transactions.filter((transaction) => {
     const matchesSearch =
       transaction.customer?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       transaction.cylinderSize?.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesStatus = statusFilter === "all" || transaction.status === statusFilter
     const matchesTab = activeTab === "all" || transaction.type === activeTab
     return matchesSearch && matchesStatus && matchesTab
-  })
+  }) : []
 
   const getTransactionIcon = (type: string) => {
     switch (type) {
@@ -758,9 +799,12 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
               New Transaction
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" aria-describedby="dialog-description">
             <DialogHeader>
               <DialogTitle>{editingTransaction ? "Edit Transaction" : "Create New Transaction"}</DialogTitle>
+              <div id="dialog-description" className="sr-only">
+                {editingTransaction ? "Edit an existing cylinder transaction" : "Create a new cylinder transaction with customer, type, and payment details"}
+              </div>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -796,6 +840,7 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
                     className="pr-10"
                     required
                   />
+
                   {showCustomerSuggestions && filteredCustomerSuggestions.length > 0 && (
                     <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
                       {filteredCustomerSuggestions.map((customer) => (
@@ -816,6 +861,26 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
                     </div>
                   )}
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="product">Product *</Label>
+                <Select
+                  value={formData.productId}
+                  onValueChange={(value) => setFormData({ ...formData, productId: value })}
+                  required
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select cylinder product" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {products.map((product) => (
+                      <SelectItem key={product._id} value={product._id}>
+                        {product.name} ({product.cylinderType})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -865,7 +930,7 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
               {/* Payment Method Section - Available for all transaction types */}
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="paymentMethod">Payment Method</Label>
+                  <Label htmlFor="paymentMethod">Security Type</Label>
                   <Select
                     value={formData.paymentMethod}
                     onValueChange={(value: "cash" | "cheque") =>
@@ -884,7 +949,7 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
 
                 {formData.paymentMethod === "cash" && (
                   <div className="space-y-2">
-                    <Label htmlFor="cashAmount">Cash Amount</Label>
+                    <Label htmlFor="cashAmount">Security Cash </Label>
                     <Input
                       id="cashAmount"
                       type="number"

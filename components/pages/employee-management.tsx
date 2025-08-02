@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
-import { Plus, Edit, Trash2, Search, Filter, UserCheck, CheckCircle } from "lucide-react"
+import { Plus, Edit, Trash2, Search, Filter, UserCheck, CheckCircle, Bell } from "lucide-react"
 import { employeesAPI, productsAPI, stockAssignmentsAPI } from "@/lib/api"
 
 interface Employee {
@@ -36,8 +36,10 @@ interface Product {
   _id: string
   name: string
   category: string
-  price: number
-  stock: number
+  costPrice: number
+  leastPrice: number
+  currentStock: number
+  cylinderType?: string
 }
 
 interface EmployeeManagementProps {
@@ -59,6 +61,7 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
   const [isProductListDialogOpen, setIsProductListDialogOpen] = useState(false)
   const [selectedEmployeeProducts, setSelectedEmployeeProducts] = useState<any[]>([])
   const [updateNotification, setUpdateNotification] = useState<{ message: string; visible: boolean; type: 'success' | 'warning' }>({ message: "", visible: false, type: 'success' })
+  const [adminNotifications, setAdminNotifications] = useState<any[]>([])
 
   // Form state
   const [formData, setFormData] = useState({
@@ -72,6 +75,7 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
 
   // Stock assignment form state
   const [stockFormData, setStockFormData] = useState({
+    category: "gas" as "gas" | "cylinder",
     productId: "",
     quantity: 1,
     notes: "",
@@ -80,10 +84,12 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
   useEffect(() => {
     fetchData()
     fetchStockAssignments()
+    fetchAdminNotifications()
     
     // Poll for notifications every 5 seconds
     const notificationInterval = setInterval(() => {
       checkForNewNotifications()
+      fetchAdminNotifications()
     }, 5000)
     
     return () => clearInterval(notificationInterval)
@@ -95,7 +101,18 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
       const [employeesResponse, productsResponse] = await Promise.all([employeesAPI.getAll(), productsAPI.getAll()])
 
       setEmployees(employeesResponse.data || [])
-      setProducts(productsResponse.data || [])
+      const products = productsResponse.data || []
+      setProducts(products)
+      
+      // Debug logging
+      console.log('Total products fetched:', products.length)
+      if (products.length > 0) {
+        console.log('Sample product:', products[0])
+        const cylinderProducts = products.filter((p: Product) => p.category === 'cylinder')
+        const gasProducts = products.filter((p: Product) => p.category === 'gas')
+        console.log('Cylinder products count:', cylinderProducts.length)
+        console.log('Gas products count:', gasProducts.length)
+      }
     } catch (error) {
       console.error("Failed to fetch data:", error)
       setEmployees([])
@@ -112,6 +129,19 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
     } catch (error) {
       console.error('Failed to fetch stock assignments:', error)
       setStockAssignments([])
+    }
+  }
+
+  const fetchAdminNotifications = async () => {
+    try {
+      const response = await fetch(`/api/notifications?userId=${user.id}&type=stock_returned&unread=true`)
+      if (response.ok) {
+        const data = await response.json()
+        setAdminNotifications(data || [])
+      }
+    } catch (error) {
+      console.error('Failed to fetch admin notifications:', error)
+      setAdminNotifications([])
     }
   }
 
@@ -172,6 +202,45 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
     e.preventDefault()
     try {
       if (!selectedEmployee) return
+
+      // Get the selected product and validate stock availability
+      const selectedProduct = products.find(p => p._id === stockFormData.productId)
+      if (!selectedProduct) {
+        setUpdateNotification({
+          message: 'Selected product not found',
+          visible: true,
+          type: 'warning'
+        })
+        setTimeout(() => {
+          setUpdateNotification({ message: '', visible: false, type: 'success' })
+        }, 5000)
+        return
+      }
+
+      // Check if product has sufficient stock
+      if (selectedProduct.currentStock === 0) {
+        setUpdateNotification({
+          message: `${selectedProduct.name} is out of stock and cannot be assigned`,
+          visible: true,
+          type: 'warning'
+        })
+        setTimeout(() => {
+          setUpdateNotification({ message: '', visible: false, type: 'success' })
+        }, 5000)
+        return
+      }
+
+      if (stockFormData.quantity > selectedProduct.currentStock) {
+        setUpdateNotification({
+          message: `Insufficient stock. Available: ${selectedProduct.currentStock}, Requested: ${stockFormData.quantity}`,
+          visible: true,
+          type: 'warning'
+        })
+        setTimeout(() => {
+          setUpdateNotification({ message: '', visible: false, type: 'success' })
+        }, 5000)
+        return
+      }
 
       // Check if this product is already assigned to this employee
       const existingAssignment = stockAssignments.find(
@@ -259,6 +328,7 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
 
       // Reset form and close dialog
       setStockFormData({
+        category: "gas" as "gas" | "cylinder",
         productId: "",
         quantity: 1,
         notes: "",
@@ -350,60 +420,10 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
   return (
     <div className="space-y-8">
       <div className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] rounded-2xl p-8 text-white">
-        <h1 className="text-4xl font-bold mb-2">Employee Management</h1>
-        <p className="text-white/80 text-lg">Manage employees and assign stock</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card className="bg-gradient-to-br from-blue-50 to-indigo-100 border-0 shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-700">Total Employees</CardTitle>
-            <UserCheck className="h-5 w-5 text-[#2B3068]" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-[#2B3068]">{employees.length}</div>
-            <p className="text-xs text-gray-600 mt-1">All employees</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-green-50 to-emerald-100 border-0 shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-700">Active Employees</CardTitle>
-            <UserCheck className="h-5 w-5 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-green-500">
-              {employees.filter((e) => e.status === "active").length}
-            </div>
-            <p className="text-xs text-gray-600 mt-1">Currently active</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-0 shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-700">Inactive Employees</CardTitle>
-            <UserCheck className="h-5 w-5 text-orange-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-orange-500">
-              {employees.filter((e) => e.status === "inactive").length}
-            </div>
-            <p className="text-xs text-gray-600 mt-1">Currently inactive</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-purple-50 to-violet-100 border-0 shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-700">Total Payroll</CardTitle>
-            <UserCheck className="h-5 w-5 text-purple-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-purple-500">
-              ${employees.reduce((sum, e) => sum + (e.debitAmount || 0), 0).toLocaleString()}
-            </div>
-            <p className="text-xs text-gray-600 mt-1">Monthly total</p>
-          </CardContent>
-        </Card>
+        <div>
+          <h1 className="text-4xl font-bold mb-2">Employee Management</h1>
+          <p className="text-white/80 text-lg">Manage your team and assign stock efficiently</p>
+        </div>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
@@ -548,13 +568,15 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
               </TableHeader>
               <TableBody>
                 {filteredEmployees.map((employee) => {
+                  // Assigned Stock = Total cumulative stock ever assigned (all statuses except returned)
                   const assignedStock = stockAssignments
-                    .filter((a) => a.employee?._id === employee._id && a.status === "assigned")
+                    .filter((a) => a.employee?._id === employee._id && a.status !== "returned")
                     .reduce((sum, a) => sum + (a.quantity || 0), 0)
                   
+                  // Remaining Stock = Current stock employee has after sales (using remainingQuantity)
                   const remainingStock = stockAssignments
                     .filter((a) => a.employee?._id === employee._id && a.status === "received")
-                    .reduce((sum, a) => sum + (a.quantity || 0), 0)
+                    .reduce((sum, a) => sum + (a.remainingQuantity || a.quantity || 0), 0)
                   
                   const receivedBackStock = stockAssignments
                     .filter((a) => a.employee?._id === employee._id && a.status === "returned")
@@ -660,21 +682,57 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
           </DialogHeader>
           <form onSubmit={handleStockAssignment} className="space-y-4">
             <div className="space-y-2">
+              <Label htmlFor="category">Category *</Label>
+              <Select
+                value={stockFormData.category}
+                onValueChange={(value: "gas" | "cylinder") => {
+                  console.log('Category selected:', value)
+                  setStockFormData({ ...stockFormData, category: value, productId: "" })
+                }}
+                required
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="gas">Gas</SelectItem>
+                  <SelectItem value="cylinder">Cylinder</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="product">Product *</Label>
               <Select
                 value={stockFormData.productId}
                 onValueChange={(value) => setStockFormData({ ...stockFormData, productId: value })}
                 required
+                disabled={!stockFormData.category}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select product" />
+                  <SelectValue placeholder={stockFormData.category ? "Select product" : "Select category first"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {products.map((product) => (
-                    <SelectItem key={product._id} value={product._id}>
-                      {product.name} (Stock: {product.stock})
-                    </SelectItem>
-                  ))}
+                  {(() => {
+                    const filteredProducts = products.filter((product) => 
+                      product.category === stockFormData.category
+                    )
+                    
+
+                    
+                    return filteredProducts.map((product) => (
+                      <SelectItem key={product._id} value={product._id}>
+                        {product.name} (Available: {product.currentStock})
+                      </SelectItem>
+                    ))
+                  })()}
+                  {products.filter((product) => 
+                    product.category === stockFormData.category
+                  ).length === 0 && stockFormData.category && (
+                    <div className="px-2 py-1.5 text-sm text-gray-500 text-center">
+                      No products available in {stockFormData.category} category
+                    </div>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -781,7 +839,7 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
 
       {/* Stock Return Notification Popup */}
       {notification.visible && (
-        <div className="fixed top-4 right-4 z-50 bg-green-500 text-white px-6 py-4 rounded-lg shadow-lg max-w-md">
+        <div className="fixed top-4 right-4 z-[9999] bg-green-500 text-white px-6 py-4 rounded-lg shadow-lg max-w-md">
           <div className="flex items-center gap-2">
             <CheckCircle className="w-5 h-5" />
             <span className="font-medium">Stock Return Notification</span>
@@ -792,7 +850,7 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
 
       {/* Stock Update Notification Popup */}
       {updateNotification.visible && (
-        <div className={`fixed top-4 right-4 z-50 px-6 py-4 rounded-lg shadow-lg max-w-md ${
+        <div className={`fixed top-4 right-4 z-[9999] px-6 py-4 rounded-lg shadow-lg max-w-md ${
           updateNotification.type === 'success' 
             ? 'bg-green-500 text-white' 
             : 'bg-orange-500 text-white'

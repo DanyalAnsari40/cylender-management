@@ -41,6 +41,7 @@ interface Sale {
   totalAmount: number
   paymentMethod: string
   paymentStatus: string
+  receivedAmount?: number
   notes?: string
   customerSignature?: string
   createdAt: string
@@ -69,6 +70,7 @@ export function GasSales() {
   const [sales, setSales] = useState<Sale[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [products, setProducts] = useState<Product[]>([])
+  const [allProducts, setAllProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingSale, setEditingSale] = useState<Sale | null>(null)
@@ -91,11 +93,21 @@ export function GasSales() {
   // Form state
   const [formData, setFormData] = useState({
     customerId: "",
-    items: [{ productId: "", quantity: "" }],
+    category: "gas", // New category field
+    items: [{ productId: "", quantity: "", price: "" }], // Added price field
     paymentMethod: "cash",
-    paymentStatus: "paid",
+    paymentStatus: "cleared",
+    receivedAmount: "",
     notes: "",
   })
+
+  // Price validation popup state
+  const [showPriceValidationPopup, setShowPriceValidationPopup] = useState(false)
+  const [validationMessage, setValidationMessage] = useState("")
+  
+  // Stock insufficient popup state
+  const [showStockInsufficientPopup, setShowStockInsufficientPopup] = useState(false)
+  const [stockErrorMessage, setStockErrorMessage] = useState("")
 
   useEffect(() => {
     fetchData()
@@ -137,7 +149,13 @@ export function GasSales() {
       
       setSales(salesData)
       setCustomers(customersData)
-      setProducts(productsData)
+      setAllProducts(productsData)
+      
+      // Filter products based on selected category
+      const filteredProducts = productsData.filter((product: Product) => product.category === formData.category)
+      console.log('GasSales - Filtering products for category:', formData.category)
+      console.log('GasSales - Filtered products:', filteredProducts)
+      setProducts(filteredProducts)
     } catch (error) {
       console.error("Failed to fetch data:", error)
       // Type guard to check if error is an axios error
@@ -202,12 +220,19 @@ export function GasSales() {
         totalAmount,
         paymentMethod: formData.paymentMethod,
         paymentStatus: formData.paymentStatus,
+        receivedAmount: parseFloat(formData.receivedAmount) || 0,
         notes: formData.notes,
       }
 
+      console.log('GasSales - Submitting sale data:', saleData)
+      console.log('GasSales - Sale items:', saleItems)
+      console.log('GasSales - Form data items:', formData.items)
+
       if (editingSale) {
+        console.log('GasSales - Updating existing sale:', editingSale._id)
         await salesAPI.update(editingSale._id, saleData)
       } else {
+        console.log('GasSales - Creating new sale')
         await salesAPI.create(saleData)
       }
 
@@ -216,16 +241,27 @@ export function GasSales() {
       setIsDialogOpen(false)
     } catch (error: any) {
       console.error("Failed to save sale:", error)
-      alert(error.response?.data?.error || "Failed to save sale")
+      const errorMessage = error.response?.data?.error || "Failed to save sale"
+      
+      // Check if it's a stock insufficient error
+      if (errorMessage.toLowerCase().includes('insufficient stock') || errorMessage.toLowerCase().includes('available:')) {
+        setStockErrorMessage(errorMessage)
+        setShowStockInsufficientPopup(true)
+      } else {
+        // For other errors, still use alert for now
+        alert(errorMessage)
+      }
     }
   }
 
   const resetForm = () => {
     setFormData({
       customerId: "",
-      items: [{ productId: "", quantity: "" }],
+      category: "gas",
+      items: [{ productId: "", quantity: "", price: "" }],
       paymentMethod: "cash",
-      paymentStatus: "paid",
+      paymentStatus: "cleared",
+      receivedAmount: "",
       notes: "",
     })
     setCustomerSearchTerm("")
@@ -238,12 +274,15 @@ export function GasSales() {
     setEditingSale(sale)
     setFormData({
       customerId: sale.customer?._id || "",
+      category: "gas", // Default to gas for existing sales
       items: (sale.items || []).map((item) => ({
         productId: item.product?._id || "",
         quantity: item.quantity.toString(),
+        price: item.price?.toString() || "",
       })),
       paymentMethod: sale.paymentMethod || "cash",
-      paymentStatus: sale.paymentStatus || "paid",
+      paymentStatus: sale.paymentStatus || "cleared",
+      receivedAmount: (sale as any).receivedAmount?.toString() || "",
       notes: sale.notes || "",
     })
     setCustomerSearchTerm(sale.customer?.name || "")
@@ -267,7 +306,7 @@ export function GasSales() {
   const addItem = () => {
     setFormData({
       ...formData,
-      items: [...formData.items, { productId: "", quantity: "" }],
+      items: [...formData.items, { productId: "", quantity: "", price: "" }],
     })
   }
 
@@ -279,12 +318,21 @@ export function GasSales() {
   }
 
   const updateItem = (index: number, field: string, value: any) => {
+    console.log('updateItem called:', { index, field, value })
+    console.log('Current formData.items:', formData.items)
+    console.log('Current item before update:', formData.items[index])
+    
     const updatedItems = [...formData.items]
-    updatedItems[index] = { ...updatedItems[index], [field]: value }
+    // Ensure we preserve all existing fields when updating
+    updatedItems[index] = { 
+      ...updatedItems[index], 
+      [field]: value 
+    }
+    console.log('Updated item after change:', updatedItems[index])
 
-    // Price is now auto-fetched from product.costPrice, no need to set it manually
-
-    setFormData({ ...formData, items: updatedItems })
+    const newFormData = { ...formData, items: updatedItems }
+    console.log('New form data:', newFormData)
+    setFormData(newFormData)
   }
 
   // Handle receipt button click - show signature dialog only if no signature exists
@@ -418,9 +466,8 @@ export function GasSales() {
   })
 
   const totalAmount = formData.items.reduce((sum, item) => {
-    const product = (products || []).find((p) => p._id === item.productId)
     const quantity = Number(item.quantity) || 0
-    const price = Number(product?.costPrice) || 0
+    const price = Number(item.price) || 0
     return sum + price * quantity
   }, 0)
 
@@ -485,7 +532,7 @@ export function GasSales() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="paid">Paid</SelectItem>
+              <SelectItem value="cleared">Cleared</SelectItem>
               <SelectItem value="pending">Pending</SelectItem>
               <SelectItem value="overdue">Overdue</SelectItem>
             </SelectContent>
@@ -504,7 +551,31 @@ export function GasSales() {
               <DialogTitle>{editingSale ? "Edit Sale" : "Create New Sale"}</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="category">Category *</Label>
+                  <Select
+                    value={formData.category}
+                    onValueChange={(value) => {
+                      console.log('Category changed to:', value)
+                      console.log('All products:', allProducts)
+                      setFormData({ ...formData, category: value })
+                      // Filter products based on selected category
+                      const filteredProducts = allProducts.filter((product: Product) => product.category === value)
+                      console.log('Filtered products for category', value, ':', filteredProducts)
+                      setProducts(filteredProducts)
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="gas">Gas</SelectItem>
+                      <SelectItem value="cylinder">Cylinder</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
                 <div className="space-y-2 relative">
                   <Label htmlFor="customer">Customer *</Label>
                   <Input
@@ -575,9 +646,31 @@ export function GasSales() {
                         <Label>Product</Label>
                         <ProductDropdown
                           selectedProductId={item.productId}
-                          onSelect={(productId) => updateItem(index, "productId", productId)}
-                          categoryFilter="gas"
-                          placeholder="Select gas product"
+                          onSelect={(productId) => {
+                            console.log('Product selected:', productId)
+                            const product = products.find((p: Product) => p._id === productId)
+                            console.log('Found product:', product)
+                            
+                            // Update both productId and price in a single atomic operation
+                            const updatedItems = [...formData.items]
+                            updatedItems[index] = {
+                              ...updatedItems[index],
+                              productId: productId,
+                              price: product ? product.leastPrice.toString() : updatedItems[index].price
+                            }
+                            
+                            console.log('Atomic update - item before:', formData.items[index])
+                            console.log('Atomic update - item after:', updatedItems[index])
+                            
+                            setFormData({ ...formData, items: updatedItems })
+                            
+                            if (product) {
+                              console.log('Auto-filled price:', product.leastPrice)
+                            }
+                          }}
+                          categoryFilter={formData.category}
+                          placeholder={`Select ${formData.category} product`}
+                          products={products}
                         />
                       </div>
 
@@ -587,19 +680,51 @@ export function GasSales() {
                           type="number"
                           min="1"
                           value={item.quantity}
-                          onChange={(e) => updateItem(index, "quantity", e.target.value)}
+                          onChange={(e) => {
+                            const enteredQuantity = parseInt(e.target.value) || 0
+                            const product = products.find((p: Product) => p._id === item.productId)
+                            
+                            // Check stock availability in real-time
+                            if (product && enteredQuantity > product.currentStock) {
+                              setStockErrorMessage(`Insufficient stock for ${product.name}. Available: ${product.currentStock}, Required: ${enteredQuantity}`)
+                              setShowStockInsufficientPopup(true)
+                              
+                              // Auto-hide popup after 2 seconds
+                              setTimeout(() => {
+                                setShowStockInsufficientPopup(false)
+                              }, 2000)
+                              
+                              return // Don't update the quantity if stock is insufficient
+                            }
+                            
+                            updateItem(index, "quantity", e.target.value)
+                          }}
                         />
                       </div>
 
                       <div className="space-y-2">
-                        <Label>Price (AED) - Auto-fetched</Label>
+                        <Label>Price (AED) - Editable</Label>
                         <Input
-                          value={(() => {
-                            const product = products.find(p => p._id === item.productId)
-                            return product?.costPrice ? `AED ${product.costPrice.toFixed(2)}` : 'Select product first'
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={item.price}
+                          onChange={(e) => {
+                            const product = products.find((p: Product) => p._id === item.productId)
+                            const enteredPrice = parseFloat(e.target.value)
+                            
+                            if (product && enteredPrice < product.leastPrice) {
+                              setValidationMessage(`Enter Greater than or equal to Least Price (AED ${product.leastPrice.toFixed(2)})`)
+                              setShowPriceValidationPopup(true)
+                              return
+                            }
+                            
+                            updateItem(index, "price", e.target.value)
+                          }}
+                          placeholder={(() => {
+                            const product = products.find((p: Product) => p._id === item.productId)
+                            return product?.leastPrice ? `Min: AED ${product.leastPrice.toFixed(2)}` : 'Select product first'
                           })()}
-                          disabled
-                          className="bg-gray-50"
                         />
                       </div>
 
@@ -607,8 +732,7 @@ export function GasSales() {
                         <Label>Total (AED)</Label>
                         <div className="flex items-center gap-2">
                           <Input value={(() => {
-                            const product = products.find(p => p._id === item.productId)
-                            const price = product?.costPrice || 0
+                            const price = parseFloat(item.price) || 0
                             const quantity = Number(item.quantity) || 0
                             return `AED ${(price * quantity).toFixed(2)}`
                           })()} disabled />
@@ -634,6 +758,55 @@ export function GasSales() {
                 </div>
               </div>
 
+              {/* Received Amount Section */}
+              <div className="space-y-2">
+                <Label htmlFor="receivedAmount">Received Amount (AED) *</Label>
+                <Input
+                  id="receivedAmount"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.receivedAmount}
+                  onChange={(e) => {
+                    const receivedAmount = e.target.value
+                    const receivedValue = parseFloat(receivedAmount) || 0
+                    
+                    // Auto-select status based on received amount vs total amount
+                    let newPaymentStatus = formData.paymentStatus
+                    if (receivedValue === totalAmount && totalAmount > 0) {
+                      newPaymentStatus = "cleared"
+                    } else if (receivedValue > 0 && receivedValue < totalAmount) {
+                      newPaymentStatus = "pending"
+                    } else if (receivedValue === 0) {
+                      newPaymentStatus = "pending"
+                    }
+                    
+                    setFormData({ 
+                      ...formData, 
+                      receivedAmount: receivedAmount,
+                      paymentStatus: newPaymentStatus
+                    })
+                  }}
+                  placeholder="Enter received amount..."
+                  className="text-lg"
+                />
+                {formData.receivedAmount && (
+                  <div className="text-sm text-gray-600">
+                    {(() => {
+                      const receivedValue = parseFloat(formData.receivedAmount) || 0
+                      const remaining = totalAmount - receivedValue
+                      if (remaining > 0) {
+                        return `Remaining: AED ${remaining.toFixed(2)}`
+                      } else if (remaining < 0) {
+                        return `Excess: AED ${Math.abs(remaining).toFixed(2)}`
+                      } else {
+                        return "✓ Fully paid"
+                      }
+                    })()} 
+                  </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="paymentStatus">Payment Status</Label>
@@ -645,7 +818,7 @@ export function GasSales() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="paid">Paid</SelectItem>
+                      <SelectItem value="cleared">Cleared</SelectItem>
                       <SelectItem value="pending">Pending</SelectItem>
                       <SelectItem value="overdue">Overdue</SelectItem>
                     </SelectContent>
@@ -720,14 +893,14 @@ export function GasSales() {
                     <TableCell className="p-4">
                       <Badge
                         variant={
-                          sale.paymentStatus === "paid"
+                          sale.paymentStatus === "cleared"
                             ? "default"
                             : sale.paymentStatus === "pending"
                               ? "secondary"
                               : "destructive"
                         }
                         className={
-                          sale.paymentStatus === "paid"
+                          sale.paymentStatus === "cleared"
                             ? "bg-green-100 text-green-800"
                             : sale.paymentStatus === "pending"
                               ? "bg-yellow-100 text-yellow-800"
@@ -794,6 +967,115 @@ export function GasSales() {
             // Don't clear signature - keep it for reuse
           }} 
         />
+      )}
+
+      {/* Modern Price Validation Popup */}
+      {showPriceValidationPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Background blur overlay */}
+          <div 
+            className="absolute inset-0 bg-black/20 backdrop-blur-sm" 
+            onClick={() => setShowPriceValidationPopup(false)}
+          />
+          
+          {/* Modal with animations */}
+          <div className="relative bg-white rounded-2xl shadow-2xl p-8 mx-4 max-w-md w-full transform transition-all duration-300 scale-100 animate-in fade-in-0 zoom-in-95">
+            {/* Close button */}
+            <button
+              onClick={() => setShowPriceValidationPopup(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            
+            {/* Icon */}
+            <div className="flex items-center justify-center w-16 h-16 mx-auto mb-4 bg-gradient-to-r from-red-500 to-red-600 rounded-full">
+              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+            
+            {/* Content */}
+            <div className="text-center">
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Price Validation Error</h3>
+              <p className="text-gray-600 mb-6">{validationMessage}</p>
+              
+              {/* Action button */}
+              <button
+                onClick={() => setShowPriceValidationPopup(false)}
+                className="w-full bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold py-3 px-6 rounded-lg hover:from-red-600 hover:to-red-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl"
+              >
+                Got It
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modern Stock Insufficient Popup */}
+      {showStockInsufficientPopup && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          {/* Background blur overlay */}
+          <div 
+            className="absolute inset-0 bg-black/20 backdrop-blur-sm" 
+            onClick={() => setShowStockInsufficientPopup(false)}
+          />
+          
+          {/* Modal with animations */}
+          <div className="relative bg-white rounded-2xl shadow-2xl p-8 mx-4 max-w-md w-full transform transition-all duration-300 scale-100 animate-in fade-in-0 zoom-in-95">
+            {/* Close button */}
+            <button
+              onClick={() => setShowStockInsufficientPopup(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            
+            {/* Icon */}
+            <div className="flex items-center justify-center w-16 h-16 mx-auto mb-4 bg-gradient-to-r from-orange-500 to-red-500 rounded-full">
+              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              </svg>
+            </div>
+            
+            {/* Content */}
+            <div className="text-center">
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Insufficient Stock</h3>
+              <p className="text-gray-600 mb-6">{stockErrorMessage}</p>
+              
+              {/* Action buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    console.log('Cancel button clicked')
+                    setShowStockInsufficientPopup(false)
+                  }}
+                  className="flex-1 bg-gray-100 text-gray-700 font-semibold py-3 px-6 rounded-lg hover:bg-gray-200 transition-all duration-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    console.log('Check Stock button clicked')
+                    setShowStockInsufficientPopup(false)
+                    // You could add logic here to navigate to inventory management
+                  }}
+                  className="flex-1 bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold py-3 px-6 rounded-lg hover:from-orange-600 hover:to-red-600 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl cursor-pointer"
+                >
+                  Check Stock
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

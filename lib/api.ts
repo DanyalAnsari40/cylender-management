@@ -77,6 +77,7 @@ export const stockAssignmentsAPI = stockAPI
 export const notificationsAPI = {
   getAll: (userId: string) => api.get(`/notifications?userId=${userId}`),
   markAsRead: (id: string) => api.put(`/notifications/${id}/read`),
+  delete: (id: string) => api.delete(`/notifications/${id}`),
 }
 
 // Dashboard API

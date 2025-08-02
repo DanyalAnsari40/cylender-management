@@ -25,7 +25,7 @@ export function Dashboard() {
   const fetchStats = async () => {
     try {
       const response = await dashboardAPI.getStats()
-      console.log('Dashboard stats response:', response.data)
+      // console.log('Dashboard stats response:', response.data)
       
       // Handle nested data structure if needed
       const statsData = response.data?.data || response.data || {}

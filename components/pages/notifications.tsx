@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Bell, Check } from "lucide-react"
+import { Bell, Check, Trash2 } from "lucide-react"
 import { notificationsAPI } from "@/lib/api"
 
 interface NotificationsProps {
@@ -15,7 +15,8 @@ interface NotificationsProps {
 export function Notifications({ user, setUnreadCount }: NotificationsProps) {
   const [notifications, setNotifications] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [markingId, setMarkingId] = useState<string | null>(null);
+  const [markingId, setMarkingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchNotifications()
@@ -44,6 +45,20 @@ export function Notifications({ user, setUnreadCount }: NotificationsProps) {
       console.error("Failed to mark as read:", error);
     } finally {
       setMarkingId(null);
+    }
+  };
+
+  const deleteNotification = async (id: string) => {
+    setDeletingId(id);
+    try {
+      await notificationsAPI.delete(id);
+      const updatedNotifications = notifications.filter((n) => n._id !== id);
+      setNotifications(updatedNotifications);
+      if (setUnreadCount) setUnreadCount(updatedNotifications.filter((n) => !n.isRead).length);
+    } catch (error) {
+      console.error("Failed to delete notification:", error);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -113,7 +128,7 @@ export function Notifications({ user, setUnreadCount }: NotificationsProps) {
                       variant="outline"
                       onClick={() => markAsRead(notification._id)}
                       className="border-[#2B3068] text-[#2B3068] hover:bg-[#2B3068] hover:text-white"
-                      disabled={markingId === notification._id}
+                      disabled={markingId === notification._id || deletingId === notification._id}
                     >
                       {markingId === notification._id ? (
                         <span className="animate-spin"><Check className="w-4 h-4" /></span>
@@ -122,6 +137,19 @@ export function Notifications({ user, setUnreadCount }: NotificationsProps) {
                       )}
                     </Button>
                   )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => deleteNotification(notification._id)}
+                    className="border-red-500 text-red-500 hover:bg-red-500 hover:text-white"
+                    disabled={deletingId === notification._id || markingId === notification._id}
+                  >
+                    {deletingId === notification._id ? (
+                      <span className="animate-spin"><Trash2 className="w-4 h-4" /></span>
+                    ) : (
+                      <Trash2 className="w-4 h-4" />
+                    )}
+                  </Button>
                 </div>
               </div>
             ))}

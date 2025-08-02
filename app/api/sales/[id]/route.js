@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server"
-import { connectDB } from "@/lib/mongodb"
+import dbConnect from "@/lib/mongodb"
 import Sale from "@/models/Sale"
 import Customer from "@/models/Customer"
 
 export async function PUT(request, { params }) {
   try {
-    await connectDB()
+    await dbConnect()
 
     const { id } = params
     const data = await request.json()
@@ -52,20 +52,38 @@ export async function PUT(request, { params }) {
 
 export async function DELETE(request, { params }) {
   try {
-    await connectDB()
+    await dbConnect()
 
     const { id } = params
 
-    const sale = await Sale.findById(id)
+    // Get the sale with populated product details
+    const sale = await Sale.findById(id).populate('items.product')
     if (!sale) {
       return NextResponse.json({ error: "Sale not found" }, { status: 404 })
     }
 
-    // Reverse customer balance
-    await Customer.findByIdAndUpdate(sale.customer, {
-      $inc: { balance: -sale.amountDue },
-    })
+    console.log('Deleting sale:', sale.invoiceNumber)
 
+    // Restore stock quantities back to products
+    try {
+      for (const item of sale.items) {
+        if (item.product && item.product._id) {
+          const currentProduct = await Product.findById(item.product._id)
+          if (currentProduct) {
+            const newStock = currentProduct.currentStock + item.quantity
+            await Product.findByIdAndUpdate(item.product._id, {
+              currentStock: newStock
+            })
+            console.log(`✅ Restored ${item.product.name} stock from ${currentProduct.currentStock} to ${newStock} (returned ${item.quantity} units)`)
+          }
+        }
+      }
+    } catch (stockError) {
+      console.error('❌ Failed to restore product stock after sale deletion:', stockError)
+      // Continue with deletion even if stock restoration fails
+    }
+
+    // Delete the sale
     await Sale.findByIdAndDelete(id)
 
     return NextResponse.json({ message: "Sale deleted successfully" })

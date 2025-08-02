@@ -51,8 +51,8 @@ const EmployeeSaleSchema = new mongoose.Schema(
     },
     paymentStatus: {
       type: String,
-      enum: ["paid", "pending", "overdue"],
-      default: "paid",
+      enum: ["cleared", "pending", "overdue"],
+      default: "cleared",
     },
     notes: {
       type: String,

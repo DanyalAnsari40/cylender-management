@@ -1,6 +1,7 @@
 import dbConnect from "@/lib/mongodb";
 import StockAssignment from "@/models/StockAssignment";
 import Notification from "@/models/Notification";
+import Product from "@/models/Product";
 import { NextResponse } from "next/server";
 
 export async function GET() {
@@ -44,7 +45,37 @@ export async function POST(request) {
   try {
     const data = await request.json();
 
-    const assignment = await StockAssignment.create(data);
+    // Get the product to validate and update stock
+    const product = await Product.findById(data.product);
+    if (!product) {
+      return NextResponse.json(
+        { error: "Product not found" },
+        { status: 404 }
+      );
+    }
+
+    // Check if sufficient stock is available
+    if (product.currentStock < data.quantity) {
+      return NextResponse.json(
+        { error: `Insufficient stock. Available: ${product.currentStock}, Requested: ${data.quantity}` },
+        { status: 400 }
+      );
+    }
+
+    // Deduct stock from product when assigning to employee
+    const updatedStock = product.currentStock - data.quantity;
+    await Product.findByIdAndUpdate(data.product, {
+      currentStock: updatedStock
+    });
+
+    console.log(`Stock deducted: Product ${product.name}, Quantity: ${data.quantity}, New Stock: ${updatedStock}`);
+
+    // Create assignment with remainingQuantity initialized to the assigned quantity
+    const assignmentData = {
+      ...data,
+      remainingQuantity: data.quantity
+    };
+    const assignment = await StockAssignment.create(assignmentData);
 
     // Create notification for employee
     await Notification.create({

@@ -68,7 +68,7 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
   const [formData, setFormData] = useState({
     customer: "",
     paymentMethod: "cash",
-    paymentStatus: "paid",
+    paymentStatus: "cleared",
     notes: "",
     customerSignature: ""
   })
@@ -177,7 +177,7 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
     setFormData({
       customer: "",
       paymentMethod: "cash",
-      paymentStatus: "paid",
+      paymentStatus: "cleared",
       notes: "",
       customerSignature: ""
     })
@@ -271,8 +271,8 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
 
   const getPaymentStatusBadge = (status: string) => {
     switch (status) {
-      case "paid":
-        return <Badge className="bg-green-100 text-green-800">Paid</Badge>
+      case "cleared":
+        return <Badge className="bg-green-100 text-green-800">Cleared</Badge>
       case "pending":
         return <Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>
       case "overdue":
@@ -452,7 +452,7 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="paid">Paid</SelectItem>
+                      <SelectItem value="cleared">Cleared</SelectItem>
                       <SelectItem value="pending">Pending</SelectItem>
                       <SelectItem value="overdue">Overdue</SelectItem>
                     </SelectContent>

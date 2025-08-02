@@ -4,6 +4,7 @@ import EmployeeSale from "@/models/EmployeeSale"
 import Product from "@/models/Product"
 import Customer from "@/models/Customer"
 import User from "@/models/User"
+import StockAssignment from "@/models/StockAssignment"
 
 export async function GET(request) {
   try {
@@ -83,20 +84,48 @@ export async function POST(request) {
       items: validatedItems,
       totalAmount: calculatedTotal,
       paymentMethod: paymentMethod || "cash",
-      paymentStatus: paymentStatus || "paid",
+      paymentStatus: paymentStatus || "cleared",
       notes: notes || "",
       customerSignature: customerSignature || ""
     })
 
     const savedSale = await newSale.save()
 
-    // Update product stock
+    // Update product stock and employee stock assignments
     for (const item of validatedItems) {
       await Product.findByIdAndUpdate(
         item.product,
         { $inc: { currentStock: -item.quantity } }
       )
-      console.log(`Updated stock for product ${item.product}: reduced by ${item.quantity}`)
+      console.log(`Updated product stock for ${item.product}: reduced by ${item.quantity}`)
+      
+      // Deduct from employee's assigned stock (remainingQuantity)
+      const employeeAssignments = await StockAssignment.find({
+        employee: employeeId,
+        product: item.product,
+        status: "received",
+        remainingQuantity: { $gt: 0 }
+      }).sort({ createdAt: 1 }) // FIFO - First In, First Out
+      
+      let remainingToDeduct = item.quantity
+      
+      for (const assignment of employeeAssignments) {
+        if (remainingToDeduct <= 0) break
+        
+        const deductFromThisAssignment = Math.min(assignment.remainingQuantity, remainingToDeduct)
+        
+        await StockAssignment.findByIdAndUpdate(
+          assignment._id,
+          { $inc: { remainingQuantity: -deductFromThisAssignment } }
+        )
+        
+        remainingToDeduct -= deductFromThisAssignment
+        console.log(`Deducted ${deductFromThisAssignment} from employee assignment ${assignment._id}, remaining: ${assignment.remainingQuantity - deductFromThisAssignment}`)
+      }
+      
+      if (remainingToDeduct > 0) {
+        console.warn(`Warning: Employee ${employeeId} sold ${remainingToDeduct} more than their assigned stock for product ${item.product}`)
+      }
     }
 
     // Populate the response

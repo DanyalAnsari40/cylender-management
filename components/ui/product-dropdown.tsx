@@ -21,6 +21,7 @@ interface ProductDropdownProps {
   categoryFilter?: string;
   showDetails?: boolean;
   disabled?: boolean;
+  products?: Product[]; // Add products prop
 }
 
 export function ProductDropdown({ 
@@ -29,13 +30,23 @@ export function ProductDropdown({
   placeholder = "Select a product",
   categoryFilter,
   showDetails = true,
-  disabled = false 
+  disabled = false,
+  products: propProducts 
 }: ProductDropdownProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
 
   useEffect(() => {
+    // If products are passed as props, use them directly
+    if (propProducts) {
+      setProducts(propProducts);
+      setLoading(false);
+      setError("");
+      return;
+    }
+
+    // Otherwise fetch products (fallback behavior)
     async function fetchProducts() {
       try {
         setLoading(true);
@@ -61,7 +72,7 @@ export function ProductDropdown({
     }
 
     fetchProducts();
-  }, [categoryFilter]);
+  }, [categoryFilter, propProducts]);
 
   const getPlaceholderText = () => {
     if (loading) return "Loading products...";
@@ -70,10 +81,16 @@ export function ProductDropdown({
     return placeholder;
   };
 
+  // Find the selected product to display its name
+  const selectedProduct = products.find(p => p._id === selectedProductId);
+
   return (
     <Select 
       value={selectedProductId} 
-      onValueChange={onSelect} 
+      onValueChange={(value) => {
+        console.log('ProductDropdown onValueChange:', value);
+        onSelect(value);
+      }} 
       disabled={disabled || loading}
     >
       <SelectTrigger className="h-12">

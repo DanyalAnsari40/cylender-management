@@ -16,6 +16,12 @@ const StockAssignmentSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    remainingQuantity: {
+      type: Number,
+      default: function() {
+        return this.quantity;
+      },
+    },
     assignedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

@@ -46,8 +46,13 @@ const SaleSchema = new mongoose.Schema(
     },
     paymentStatus: {
       type: String,
-      enum: ["paid", "pending", "overdue"],
-      default: "paid",
+      enum: ["cleared", "pending", "overdue"],
+      default: "cleared",
+    },
+    receivedAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
     notes: {
       type: String,
