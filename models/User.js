@@ -16,10 +16,35 @@ const UserSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    phone: {
+      type: String,
+      default: "",
+    },
+    address: {
+      type: String,
+      default: "",
+    },
+    position: {
+      type: String,
+      default: "",
+    },
+    salary: {
+      type: Number,
+      default: 0,
+    },
+    hireDate: {
+      type: Date,
+      default: Date.now,
+    },
     role: {
       type: String,
       enum: ["admin", "employee"],
       default: "employee",
+    },
+    status: {
+      type: String,
+      enum: ["active", "inactive"],
+      default: "active",
     },
     debitAmount: {
       type: Number,

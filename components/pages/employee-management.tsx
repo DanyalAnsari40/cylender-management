@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
-import { Plus, Edit, Trash2, Search, Filter, UserCheck, Eye, EyeOff, CheckCircle } from "lucide-react"
+import { Plus, Edit, Trash2, Search, Filter, UserCheck, CheckCircle } from "lucide-react"
 import { employeesAPI, productsAPI, stockAssignmentsAPI } from "@/lib/api"
 
 interface Employee {
@@ -54,7 +54,6 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
-  const [showPasswords, setShowPasswords] = useState<{ [key: string]: boolean }>({})
   const [stockAssignments, setStockAssignments] = useState<any[]>([])
   const [notification, setNotification] = useState<{ message: string; visible: boolean }>({ message: "", visible: false })
 
@@ -241,12 +240,7 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
     setIsStockDialogOpen(true)
   }
 
-  const togglePasswordVisibility = (employeeId: string) => {
-    setShowPasswords((prev) => ({
-      ...prev,
-      [employeeId]: !prev[employeeId],
-    }))
-  }
+
 
   const filteredEmployees = employees.filter((employee) => {
     const matchesSearch =
@@ -458,7 +452,6 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
                   <TableHead className="p-2 sm:p-4">Name</TableHead>
                   <TableHead className="p-2 sm:p-4">Email</TableHead>
                   <TableHead className="p-2 sm:p-4">Phone</TableHead>
-                  <TableHead className="p-2 sm:p-4">Password</TableHead>
                   <TableHead className="p-2 sm:p-4">Status</TableHead>
                   <TableHead className="p-2 sm:p-4">Assigned Stock</TableHead>
                   <TableHead className="p-2 sm:p-4">Remaining Stock</TableHead>
@@ -479,34 +472,22 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
                   const receivedBackStock = stockAssignments
                     .filter((a) => a.employee?._id === employee._id && a.status === "returned")
                     .reduce((sum, a) => sum + (a.quantity || 0), 0)
+                  
                   return (
                     <TableRow key={employee._id}>
                       <TableCell className="p-2 sm:p-4 font-medium text-xs sm:text-sm">{employee.name}</TableCell>
                       <TableCell className="p-2 sm:p-4 text-xs sm:text-sm">{employee.email}</TableCell>
-                      <TableCell className="p-2 sm:p-4 text-xs sm:text-sm">{employee.phone}</TableCell>
-                      <TableCell className="p-2 sm:p-4 text-xs sm:text-sm">
-                        <div className="flex items-center gap-2">
-                          {showPasswords[employee._id] ? employee.password || "••••••••" : "••••••••"}
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => togglePasswordVisibility(employee._id)}
-                            className="h-6 w-6 p-0"
-                          >
-                            {showPasswords[employee._id] ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                          </Button>
-                        </div>
-                      </TableCell>
+                      <TableCell className="p-2 sm:p-4 text-xs sm:text-sm">{employee.phone || "Not provided"}</TableCell>
                       <TableCell className="p-2 sm:p-4">
                         <Badge
-                          variant={employee.status === "active" ? "default" : "secondary"}
+                          variant={(employee.status || "active") === "active" ? "default" : "secondary"}
                           className={
-                            employee.status === "active"
+                            (employee.status || "active") === "active"
                               ? "bg-green-100 text-green-800 text-xs"
                               : "bg-gray-100 text-gray-800 text-xs"
                           }
                         >
-                          {employee.status}
+                          {employee.status || "active"}
                         </Badge>
                       </TableCell>
                       <TableCell className="p-2 sm:p-4 text-xs sm:text-sm">{assignedStock}</TableCell>

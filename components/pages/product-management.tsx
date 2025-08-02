@@ -62,7 +62,8 @@ export function ProductManagement() {
         cylinderType: formData.category === "cylinder" ? formData.cylinderType : undefined,
         costPrice: Number.parseFloat(formData.costPrice),
         leastPrice: Number.parseFloat(formData.leastPrice),
-        currentStock: 0,
+        // Only set currentStock to 0 for new products, not when updating existing ones
+        ...(editingProduct ? {} : { currentStock: 0 }),
       }
 
       if (editingProduct) {
