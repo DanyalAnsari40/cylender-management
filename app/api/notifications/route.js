@@ -16,12 +16,23 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
+    const type = searchParams.get("type");
+    const unread = searchParams.get("unread");
 
     if (!userId) {
       return NextResponse.json({ error: "User ID required" }, { status: 400 });
     }
 
-    const notifications = await Notification.find({ recipient: userId })
+    // Build query object
+    const query = { recipient: userId };
+    if (type) {
+      query.type = type;
+    }
+    if (unread === "true") {
+      query.isRead = false;
+    }
+
+    const notifications = await Notification.find(query)
       .populate("sender", "name")
       .sort({ createdAt: -1 })
       .limit(50);

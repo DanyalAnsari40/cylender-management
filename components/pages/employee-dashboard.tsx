@@ -58,10 +58,12 @@ export function EmployeeDashboard({ user, setUnreadCount }: EmployeeDashboardPro
   const handleReturnStock = async (assignmentId: string) => {
     try {
       await stockAPI.returnStock(assignmentId);
-      fetchEmployeeData();
+      // Refresh data immediately to ensure UI updates
+      await fetchEmployeeData();
+      console.log('Stock returned successfully');
     } catch (error) {
-      // Optionally show a toast or error
       console.error("Failed to return stock:", error);
+      alert('Failed to return stock. Please try again.');
     }
   };
 

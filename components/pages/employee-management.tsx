@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
-import { Plus, Edit, Trash2, Search, Filter, UserCheck, Eye, EyeOff } from "lucide-react"
+import { Plus, Edit, Trash2, Search, Filter, UserCheck, Eye, EyeOff, CheckCircle } from "lucide-react"
 import { employeesAPI, productsAPI, stockAssignmentsAPI } from "@/lib/api"
 
 interface Employee {
@@ -56,6 +56,7 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
   const [statusFilter, setStatusFilter] = useState("all")
   const [showPasswords, setShowPasswords] = useState<{ [key: string]: boolean }>({})
   const [stockAssignments, setStockAssignments] = useState<any[]>([])
+  const [notification, setNotification] = useState<{ message: string; visible: boolean }>({ message: "", visible: false })
 
   // Form state
   const [formData, setFormData] = useState({
@@ -77,6 +78,13 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
   useEffect(() => {
     fetchData()
     fetchStockAssignments()
+    
+    // Poll for notifications every 5 seconds
+    const notificationInterval = setInterval(() => {
+      checkForNewNotifications()
+    }, 5000)
+    
+    return () => clearInterval(notificationInterval)
   }, [])
 
   const fetchData = async () => {
@@ -100,8 +108,35 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
       const response = await stockAssignmentsAPI.getAll()
       setStockAssignments(response.data || [])
     } catch (error) {
+      console.error('Failed to fetch stock assignments:', error)
       setStockAssignments([])
     }
+  }
+
+  const checkForNewNotifications = async () => {
+    try {
+      const response = await fetch('/api/notifications?userId=' + user.id + '&type=stock_returned&unread=true')
+      if (response.ok) {
+        const data = await response.json()
+        if (data.length > 0) {
+          const latestNotification = data[0]
+          showNotification(`Stock returned by ${latestNotification.sender?.name || 'Employee'}: ${latestNotification.message}`)
+          // Mark notification as read
+          await fetch(`/api/notifications/${latestNotification._id}/read`, { method: 'PUT' })
+          // Refresh stock assignments to show updated data
+          fetchStockAssignments()
+        }
+      }
+    } catch (error) {
+      console.error('Failed to check notifications:', error)
+    }
+  }
+
+  const showNotification = (message: string) => {
+    setNotification({ message, visible: true })
+    setTimeout(() => {
+      setNotification({ message: "", visible: false })
+    }, 5000)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -135,13 +170,13 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
         employee: selectedEmployee._id,
         product: stockFormData.productId,
         quantity: stockFormData.quantity,
+        assignedBy: user.id,
         notes: stockFormData.notes,
-        status: "assigned",
-        assignedBy: user.id, // <-- Add this line
       }
 
       await stockAssignmentsAPI.create(assignmentData)
 
+      // Reset form and close dialog
       setStockFormData({
         productId: "",
         quantity: 1,
@@ -150,7 +185,9 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
       setIsStockDialogOpen(false)
       setSelectedEmployee(null)
 
-      alert("Stock assigned successfully!")
+      // Refresh both employee data and stock assignments
+      await fetchData()
+      await fetchStockAssignments()
     } catch (error: any) {
       console.error("Failed to assign stock:", error)
       alert(error.response?.data?.error || "Failed to assign stock")
@@ -419,6 +456,8 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
                   <TableHead className="p-2 sm:p-4">Password</TableHead>
                   <TableHead className="p-2 sm:p-4">Status</TableHead>
                   <TableHead className="p-2 sm:p-4">Assigned Stock</TableHead>
+                  <TableHead className="p-2 sm:p-4">Remaining Stock</TableHead>
+                  <TableHead className="p-2 sm:p-4">Received Back Stock</TableHead>
                   <TableHead className="p-2 sm:p-4">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -426,6 +465,14 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
                 {filteredEmployees.map((employee) => {
                   const assignedStock = stockAssignments
                     .filter((a) => a.employee?._id === employee._id && a.status === "assigned")
+                    .reduce((sum, a) => sum + (a.quantity || 0), 0)
+                  
+                  const remainingStock = stockAssignments
+                    .filter((a) => a.employee?._id === employee._id && a.status === "received")
+                    .reduce((sum, a) => sum + (a.quantity || 0), 0)
+                  
+                  const receivedBackStock = stockAssignments
+                    .filter((a) => a.employee?._id === employee._id && a.status === "returned")
                     .reduce((sum, a) => sum + (a.quantity || 0), 0)
                   return (
                     <TableRow key={employee._id}>
@@ -458,6 +505,8 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
                         </Badge>
                       </TableCell>
                       <TableCell className="p-2 sm:p-4 text-xs sm:text-sm">{assignedStock}</TableCell>
+                      <TableCell className="p-2 sm:p-4 text-xs sm:text-sm">{remainingStock}</TableCell>
+                      <TableCell className="p-2 sm:p-4 text-xs sm:text-sm">{receivedBackStock}</TableCell>
                       <TableCell className="p-2 sm:p-4">
                         <div className="flex space-x-1 sm:space-x-2">
                           <Button
@@ -491,7 +540,7 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
                 })}
                 {filteredEmployees.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                    <TableCell colSpan={9} className="text-center py-8 text-gray-500">
                       No employees found.
                     </TableCell>
                   </TableRow>
@@ -563,6 +612,17 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Notification Popup */}
+      {notification.visible && (
+        <div className="fixed top-4 right-4 z-50 bg-green-500 text-white px-6 py-4 rounded-lg shadow-lg max-w-md">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="w-5 h-5" />
+            <span className="font-medium">Stock Return Notification</span>
+          </div>
+          <p className="mt-1 text-sm">{notification.message}</p>
+        </div>
+      )}
     </div>
   )
 }
