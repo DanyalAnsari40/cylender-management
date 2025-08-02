@@ -34,6 +34,10 @@ interface CylinderTransaction {
   depositAmount?: number
   refillAmount?: number
   returnAmount?: number
+  paymentMethod?: "cash" | "cheque"
+  cashAmount?: number
+  bankName?: string
+  checkNumber?: string
   status: "pending" | "cleared" | "overdue"
   notes?: string
   createdAt: string
@@ -71,6 +75,177 @@ export function CylinderManagement() {
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false)
   const [filteredSearchSuggestions, setFilteredSearchSuggestions] = useState<Customer[]>([])
 
+  // Dynamic column visibility based on active tab
+  const getVisibleColumns = () => {
+    const baseColumns = ['type', 'customer', 'cylinderSize', 'quantity', 'amount']
+    const commonColumns = ['paymentMethod', 'cashAmount', 'bankName', 'checkNumber', 'notes', 'status', 'date', 'actions']
+    
+    switch (activeTab) {
+      case 'deposit':
+        return [...baseColumns, 'depositAmount', ...commonColumns]
+      case 'refill':
+        return [...baseColumns, 'refillAmount', ...commonColumns]
+      case 'return':
+        return [...baseColumns, 'returnAmount', ...commonColumns]
+      case 'all':
+      default:
+        return [...baseColumns, 'depositAmount', 'refillAmount', 'returnAmount', ...commonColumns]
+    }
+  }
+
+  // Helper function to render table headers based on visible columns
+  const renderTableHeaders = () => {
+    const visibleColumns = getVisibleColumns()
+    const columnHeaders = {
+      type: 'Type',
+      customer: 'Customer',
+      cylinderSize: 'Cylinder Size',
+      quantity: 'Quantity',
+      amount: 'Amount',
+      depositAmount: 'Deposit Amount',
+      refillAmount: 'Refill Amount',
+      returnAmount: 'Return Amount',
+      paymentMethod: 'Payment Method',
+      cashAmount: 'Cash Amount',
+      bankName: 'Bank Name',
+      checkNumber: 'Check Number',
+      notes: 'Notes',
+      status: 'Status',
+      date: 'Date',
+      actions: 'Actions'
+    }
+
+    return visibleColumns.map(column => (
+      <TableHead key={column} className="p-4">
+        {columnHeaders[column as keyof typeof columnHeaders]}
+      </TableHead>
+    ))
+  }
+
+  // Helper function to render table cells based on visible columns
+  const renderTableCells = (transaction: CylinderTransaction) => {
+    const visibleColumns = getVisibleColumns()
+    
+    const cellRenderers = {
+      type: () => (
+        <TableCell className="p-4">
+          <div className="flex items-center gap-2">
+            {getTransactionIcon(transaction.type)}
+            {getTypeBadge(transaction.type)}
+          </div>
+        </TableCell>
+      ),
+      customer: () => (
+        <TableCell className="p-4">
+          <div>
+            <div className="font-medium">{transaction.customer?.name || "Unknown Customer"}</div>
+            <div className="text-sm text-gray-500">{transaction.customer?.phone}</div>
+          </div>
+        </TableCell>
+      ),
+      cylinderSize: () => (
+        <TableCell className="p-4 font-medium">
+          {transaction.cylinderSize}
+        </TableCell>
+      ),
+      quantity: () => (
+        <TableCell className="p-4">{transaction.quantity}</TableCell>
+      ),
+      amount: () => (
+        <TableCell className="p-4 font-semibold">AED {transaction.amount.toFixed(2)}</TableCell>
+      ),
+      depositAmount: () => (
+        <TableCell className="p-4">
+          {transaction.depositAmount ? `AED ${transaction.depositAmount.toFixed(2)}` : '-'}
+        </TableCell>
+      ),
+      refillAmount: () => (
+        <TableCell className="p-4">
+          {transaction.refillAmount ? `AED ${transaction.refillAmount.toFixed(2)}` : '-'}
+        </TableCell>
+      ),
+      returnAmount: () => (
+        <TableCell className="p-4">
+          {transaction.returnAmount ? `AED ${transaction.returnAmount.toFixed(2)}` : '-'}
+        </TableCell>
+      ),
+      paymentMethod: () => (
+        <TableCell className="p-4">
+          {transaction.paymentMethod ? (
+            <Badge variant={transaction.paymentMethod === 'cash' ? 'default' : 'secondary'}>
+              {transaction.paymentMethod === 'cash' ? 'Cash' : 'Cheque'}
+            </Badge>
+          ) : '-'}
+        </TableCell>
+      ),
+      cashAmount: () => (
+        <TableCell className="p-4">
+          {transaction.cashAmount ? `AED ${transaction.cashAmount.toFixed(2)}` : '-'}
+        </TableCell>
+      ),
+      bankName: () => (
+        <TableCell className="p-4">
+          {transaction.bankName || '-'}
+        </TableCell>
+      ),
+      checkNumber: () => (
+        <TableCell className="p-4">
+          {transaction.checkNumber || '-'}
+        </TableCell>
+      ),
+      notes: () => (
+        <TableCell className="p-4">
+          <div className="max-w-32 truncate" title={transaction.notes || ''}>
+            {transaction.notes || '-'}
+          </div>
+        </TableCell>
+      ),
+      status: () => (
+        <TableCell className="p-4">{getStatusBadge(transaction.status)}</TableCell>
+      ),
+      date: () => (
+        <TableCell className="p-4">{new Date(transaction.createdAt).toLocaleDateString()}</TableCell>
+      ),
+      actions: () => (
+        <TableCell className="p-4">
+          <div className="flex space-x-2">
+            {transaction.type !== "return" && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleReceiptClick(transaction)}
+                className="text-green-600 border-green-600 hover:bg-green-600 hover:text-white"
+              >
+                Receipt
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleEdit(transaction)}
+              className="text-[#2B3068] border-[#2B3068] hover:bg-[#2B3068] hover:text-white"
+            >
+              <Edit className="w-4 h-4" />
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleDelete(transaction._id)}
+              className="text-red-600 border-red-600 hover:bg-red-600 hover:text-white"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+        </TableCell>
+      )
+    }
+
+    return visibleColumns.map(column => {
+      const renderer = cellRenderers[column as keyof typeof cellRenderers]
+      return renderer ? renderer() : null
+    })
+  }
+
   // Form state
   const [formData, setFormData] = useState({
     type: "deposit" as "deposit" | "refill" | "return",
@@ -81,7 +256,11 @@ export function CylinderManagement() {
     depositAmount: 0,
     refillAmount: 0,
     returnAmount: 0,
-  status: "pending" as "pending" | "cleared" | "overdue",
+    paymentMethod: "cash" as "cash" | "cheque",
+    cashAmount: 0,
+    bankName: "",
+    checkNumber: "",
+    status: "pending" as "pending" | "cleared" | "overdue",
     notes: "",
   })
 
@@ -149,6 +328,10 @@ export function CylinderManagement() {
         depositAmount: formData.type === "deposit" ? formData.depositAmount : undefined,
         refillAmount: formData.type === "refill" ? formData.refillAmount : undefined,
         returnAmount: formData.type === "return" ? formData.returnAmount : undefined,
+        paymentMethod: formData.paymentMethod,
+        cashAmount: formData.paymentMethod === "cash" ? formData.cashAmount : undefined,
+        bankName: formData.paymentMethod === "cheque" ? formData.bankName : undefined,
+        checkNumber: formData.paymentMethod === "cheque" ? formData.checkNumber : undefined,
         status: formData.status,
         notes: formData.notes,
       }
@@ -191,6 +374,10 @@ export function CylinderManagement() {
       depositAmount: "" as any,
       refillAmount: "" as any,
       returnAmount: "" as any,
+      paymentMethod: "cash" as "cash" | "cheque",
+      cashAmount: "" as any,
+      bankName: "",
+      checkNumber: "",
       status: "pending" as any, // Default to pending
       notes: "",
     })
@@ -211,6 +398,10 @@ export function CylinderManagement() {
       depositAmount: transaction.depositAmount || 0,
       refillAmount: transaction.refillAmount || 0,
       returnAmount: transaction.returnAmount || 0,
+      paymentMethod: (transaction as any).paymentMethod || "cash",
+      cashAmount: (transaction as any).cashAmount || 0,
+      bankName: (transaction as any).bankName || "",
+      checkNumber: (transaction as any).checkNumber || "",
       status: transaction.status,
       notes: transaction.notes || "",
     })
@@ -639,12 +830,8 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
                       <SelectValue placeholder="Select size" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="5kg">5kg</SelectItem>
-                      <SelectItem value="10kg">10kg</SelectItem>
-                      <SelectItem value="15kg">15kg</SelectItem>
-                      <SelectItem value="20kg">20kg</SelectItem>
-                      <SelectItem value="25kg">25kg</SelectItem>
-                      <SelectItem value="45kg">45kg</SelectItem>
+                      <SelectItem value="small">Small</SelectItem>
+                      <SelectItem value="large">Large</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -675,6 +862,74 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
                 </div>
               </div>
 
+              {/* Payment Method Section - Available for all transaction types */}
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="paymentMethod">Payment Method</Label>
+                  <Select
+                    value={formData.paymentMethod}
+                    onValueChange={(value: "cash" | "cheque") =>
+                      setFormData({ ...formData, paymentMethod: value })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select payment method" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">Cash</SelectItem>
+                      <SelectItem value="cheque">Cheque</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {formData.paymentMethod === "cash" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="cashAmount">Cash Amount</Label>
+                    <Input
+                      id="cashAmount"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.cashAmount}
+                      onChange={(e) =>
+                        setFormData({ ...formData, cashAmount: Number.parseFloat(e.target.value) || 0 })
+                      }
+                      placeholder="Enter cash amount"
+                    />
+                  </div>
+                )}
+
+                {formData.paymentMethod === "cheque" && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="bankName">Bank Name</Label>
+                      <Input
+                        id="bankName"
+                        type="text"
+                        value={formData.bankName}
+                        onChange={(e) =>
+                          setFormData({ ...formData, bankName: e.target.value })
+                        }
+                        placeholder="Enter bank name"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="checkNumber">Check Number</Label>
+                      <Input
+                        id="checkNumber"
+                        type="text"
+                        value={formData.checkNumber}
+                        onChange={(e) =>
+                          setFormData({ ...formData, checkNumber: e.target.value })
+                        }
+                        placeholder="Enter check number"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Transaction-specific amount fields */}
               {formData.type === "deposit" && (
                 <div className="space-y-2">
                   <Label htmlFor="depositAmount">Deposit Amount</Label>
@@ -684,9 +939,8 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
                     step="0.01"
                     min="0"
                     value={formData.depositAmount}
-                    onChange={(e) =>
-                      setFormData({ ...formData, depositAmount: Number.parseFloat(e.target.value) || 0 })
-                    }
+                    onChange={(e) => setFormData({ ...formData, depositAmount: Number.parseFloat(e.target.value) || 0 })}
+                    placeholder="Enter deposit amount"
                   />
                 </div>
               )}
@@ -701,6 +955,7 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
                     min="0"
                     value={formData.refillAmount}
                     onChange={(e) => setFormData({ ...formData, refillAmount: Number.parseFloat(e.target.value) || 0 })}
+                    placeholder="Enter refill amount"
                   />
                 </div>
               )}
@@ -715,6 +970,7 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
                     min="0"
                     value={formData.returnAmount}
                     onChange={(e) => setFormData({ ...formData, returnAmount: Number.parseFloat(e.target.value) || 0 })}
+                    placeholder="Enter return amount"
                   />
                 </div>
               )}
@@ -781,72 +1037,18 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="p-4">Type</TableHead>
-                      <TableHead className="p-4">Customer</TableHead>
-                      <TableHead className="p-4">Cylinder Size</TableHead>
-                      <TableHead className="p-4">Quantity</TableHead>
-                      <TableHead className="p-4">Amount</TableHead>
-                      <TableHead className="p-4">Status</TableHead>
-                      <TableHead className="p-4">Date</TableHead>
-                      <TableHead className="p-4">Actions</TableHead>
+                      {renderTableHeaders()}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredTransactions.map((transaction) => (
                       <TableRow key={transaction._id}>
-                        <TableCell className="p-4">
-                          <div className="flex items-center gap-2">
-                            {getTransactionIcon(transaction.type)}
-                            {getTypeBadge(transaction.type)}
-                          </div>
-                        </TableCell>
-                        <TableCell className="p-4">
-                          <div>
-                            <div className="font-medium">{transaction.customer?.name || "Unknown Customer"}</div>
-                            <div className="text-sm text-gray-500">{transaction.customer?.phone}</div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="p-4 font-medium">{transaction.cylinderSize}</TableCell>
-                        <TableCell className="p-4">{transaction.quantity}</TableCell>
-                        <TableCell className="p-4 font-semibold">AED {transaction.amount.toFixed(2)}</TableCell>
-                        <TableCell className="p-4">{getStatusBadge(transaction.status)}</TableCell>
-                        <TableCell className="p-4">{new Date(transaction.createdAt).toLocaleDateString()}</TableCell>
-                        <TableCell className="p-4">
-                          <div className="flex space-x-2">
-                            {/* Only show Receipt button for deposit and refill transactions */}
-                            {transaction.type !== "return" && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleReceiptClick(transaction)}
-                                className="text-green-600 border-green-600 hover:bg-green-600 hover:text-white"
-                              >
-                                Receipt
-                              </Button>
-                            )}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleEdit(transaction)}
-                              className="text-[#2B3068] border-[#2B3068] hover:bg-[#2B3068] hover:text-white"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleDelete(transaction._id)}
-                              className="text-red-600 border-red-600 hover:bg-red-600 hover:text-white"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
+                        {renderTableCells(transaction)}
                       </TableRow>
                     ))}
                     {filteredTransactions.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                        <TableCell colSpan={getVisibleColumns().length} className="text-center py-8 text-gray-500">
                           No transactions found.
                         </TableCell>
                       </TableRow>

@@ -15,7 +15,7 @@ const CylinderTransactionSchema = new mongoose.Schema(
     cylinderSize: {
       type: String,
       required: true,
-      enum: ["5kg", "10kg", "15kg", "20kg", "25kg", "45kg"],
+      enum: ["small", "large"],
     },
     quantity: {
       type: Number,
@@ -38,6 +38,24 @@ const CylinderTransactionSchema = new mongoose.Schema(
     returnAmount: {
       type: Number,
       default: 0,
+    },
+    // Payment method fields for deposit transactions
+    paymentMethod: {
+      type: String,
+      enum: ["cash", "cheque"],
+      default: "cash",
+    },
+    cashAmount: {
+      type: Number,
+      default: 0,
+    },
+    bankName: {
+      type: String,
+      default: "",
+    },
+    checkNumber: {
+      type: String,
+      default: "",
     },
     status: {
       type: String,
