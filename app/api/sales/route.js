@@ -46,6 +46,16 @@ export async function POST(request) {
       return NextResponse.json({ error: "One or more products not found" }, { status: 404 })
     }
 
+    // Check if there's enough stock for all items
+    for (const item of items) {
+      const product = products.find(p => p._id.toString() === item.product)
+      if (product && product.currentStock < item.quantity) {
+        return NextResponse.json({ 
+          error: `Insufficient stock for ${product.name}. Available: ${product.currentStock}, Required: ${item.quantity}` 
+        }, { status: 400 })
+      }
+    }
+
     // Generate sequential invoice number like INV-2025-01
     const currentYear = new Date().getFullYear()
     const yearPrefix = `INV-${currentYear}-`
@@ -104,6 +114,24 @@ export async function POST(request) {
     
     if (!savedSale) {
       throw new Error(`Failed to save sale after ${maxAttempts} attempts`)
+    }
+
+    // Deduct stock quantities from products after successful sale creation
+    try {
+      for (const item of items) {
+        const product = products.find(p => p._id.toString() === item.product)
+        if (product) {
+          const newStock = product.currentStock - item.quantity
+          await Product.findByIdAndUpdate(item.product, {
+            currentStock: Math.max(0, newStock) // Ensure stock doesn't go negative
+          })
+          console.log(`✅ Updated ${product.name} stock from ${product.currentStock} to ${newStock} (sold ${item.quantity} units)`)
+        }
+      }
+    } catch (stockError) {
+      console.error("❌ Failed to update product stock after sale:", stockError)
+      // Note: Sale is already created, but stock update failed
+      // In a production system, you might want to implement compensation logic
     }
 
     // Populate the created sale for response

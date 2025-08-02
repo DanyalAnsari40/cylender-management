@@ -58,9 +58,11 @@ interface Customer {
 interface Product {
   _id: string
   name: string
-  category: string
-  price: number
-  stock: number
+  category: "gas" | "cylinder"
+  cylinderType?: "large" | "small"
+  costPrice: number
+  leastPrice: number
+  currentStock: number
 }
 
 export function GasSales() {
@@ -89,7 +91,7 @@ export function GasSales() {
   // Form state
   const [formData, setFormData] = useState({
     customerId: "",
-    items: [{ productId: "", quantity: "", price: "" }],
+    items: [{ productId: "", quantity: "" }],
     paymentMethod: "cash",
     paymentStatus: "paid",
     notes: "",
@@ -172,13 +174,13 @@ export function GasSales() {
       const saleItems = formData.items
         .filter((item) => {
           const quantity = Number(item.quantity) || 0
-          const price = Number(item.price) || 0
-          return item.productId && quantity > 0 && price > 0
+          return item.productId && quantity > 0
         })
         .map((item) => {
           const product = (products || []).find((p) => p._id === item.productId)
           const quantity = Number(item.quantity) || 1
-          const price = Number(product?.price || item.price) || 0
+          // Use costPrice from product instead of manual price input
+          const price = Number(product?.costPrice) || 0
           return {
             product: item.productId,
             quantity: quantity,
@@ -221,7 +223,7 @@ export function GasSales() {
   const resetForm = () => {
     setFormData({
       customerId: "",
-      items: [{ productId: "", quantity: "", price: "" }],
+      items: [{ productId: "", quantity: "" }],
       paymentMethod: "cash",
       paymentStatus: "paid",
       notes: "",
@@ -239,7 +241,6 @@ export function GasSales() {
       items: (sale.items || []).map((item) => ({
         productId: item.product?._id || "",
         quantity: item.quantity.toString(),
-        price: item.price.toString(),
       })),
       paymentMethod: sale.paymentMethod || "cash",
       paymentStatus: sale.paymentStatus || "paid",
@@ -266,7 +267,7 @@ export function GasSales() {
   const addItem = () => {
     setFormData({
       ...formData,
-      items: [...formData.items, { productId: "", quantity: "", price: "" }],
+      items: [...formData.items, { productId: "", quantity: "" }],
     })
   }
 
@@ -281,12 +282,7 @@ export function GasSales() {
     const updatedItems = [...formData.items]
     updatedItems[index] = { ...updatedItems[index], [field]: value }
 
-    if (field === "productId") {
-      const product = (products || []).find((p) => p._id === value)
-      if (product && product.price !== undefined && product.price !== null) {
-        updatedItems[index].price = product.price.toString()
-      }
-    }
+    // Price is now auto-fetched from product.costPrice, no need to set it manually
 
     setFormData({ ...formData, items: updatedItems })
   }
@@ -424,7 +420,7 @@ export function GasSales() {
   const totalAmount = formData.items.reduce((sum, item) => {
     const product = (products || []).find((p) => p._id === item.productId)
     const quantity = Number(item.quantity) || 0
-    const price = Number(product?.price || item.price) || 0
+    const price = Number(product?.costPrice) || 0
     return sum + price * quantity
   }, 0)
 
@@ -596,19 +592,26 @@ export function GasSales() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label>Price (AED)</Label>
+                        <Label>Price (AED) - Auto-fetched</Label>
                         <Input
-                          type="number"
-                          step="0.01"
-                          value={item.price}
-                          onChange={(e) => updateItem(index, "price", e.target.value)}
+                          value={(() => {
+                            const product = products.find(p => p._id === item.productId)
+                            return product?.costPrice ? `AED ${product.costPrice.toFixed(2)}` : 'Select product first'
+                          })()}
+                          disabled
+                          className="bg-gray-50"
                         />
                       </div>
 
                       <div className="space-y-2">
                         <Label>Total (AED)</Label>
                         <div className="flex items-center gap-2">
-                          <Input value={`AED ${((Number(item.price) || 0) * (Number(item.quantity) || 0)).toFixed(2)}`} disabled />
+                          <Input value={(() => {
+                            const product = products.find(p => p._id === item.productId)
+                            const price = product?.costPrice || 0
+                            const quantity = Number(item.quantity) || 0
+                            return `AED ${(price * quantity).toFixed(2)}`
+                          })()} disabled />
                           {formData.items.length > 1 && (
                             <Button
                               type="button"
