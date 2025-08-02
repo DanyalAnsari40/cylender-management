@@ -14,6 +14,7 @@ import {
   Home,
   Bell,
   Menu,
+  TrendingUp,
 } from "lucide-react"
 
 import {
@@ -94,6 +95,34 @@ const adminMenuItems = [
     url: "reports",
     icon: FileText,
   },
+  {
+    title: "P&L",
+    url: "profit-loss",
+    icon: TrendingUp,
+  },
+]
+
+const employeeMenuItems = [
+  {
+    title: "Dashboard",
+    url: "dashboard",
+    icon: Home,
+  },
+  {
+    title: "Gas Sales",
+    url: "employee-gas-sales",
+    icon: Fuel,
+  },
+  {
+    title: "Cylinder Sales",
+    url: "employee-cylinder-sales",
+    icon: Cylinder,
+  },
+  {
+    title: "Notifications",
+    url: "notifications",
+    icon: Bell,
+  },
 ]
 
 export function AppSidebar({ currentPage, onPageChange, user, onLogout, unreadCount: externalUnreadCount, setUnreadCount }: AppSidebarProps) {
@@ -127,7 +156,7 @@ export function AppSidebar({ currentPage, onPageChange, user, onLogout, unreadCo
     setMobileOpen(false)
   }
 
-  const menuItems = user?.role === "admin" ? adminMenuItems : []
+  const menuItems = user?.role === "admin" ? adminMenuItems : employeeMenuItems
 
   const effectiveUnreadCount = externalUnreadCount !== undefined ? externalUnreadCount : unreadCount
 
@@ -155,48 +184,23 @@ export function AppSidebar({ currentPage, onPageChange, user, onLogout, unreadCo
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-1">
-              {user?.role === "employee" ? (
-                <>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      isActive={currentPage === "dashboard"}
-                      onClick={() => handlePageChange("dashboard")}
-                      className="text-white hover:bg-white/10 hover:text-white data-[active=true]:bg-white/20 data-[active=true]:text-white rounded-lg transition-all duration-200 py-2 text-sm"
-                    >
-                      <Home className="w-4 h-4" />
-                      <span className="font-medium">My Dashboard</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      isActive={currentPage === "notifications"}
-                      onClick={() => handlePageChange("notifications")}
-                      className="text-white hover:bg-white/10 hover:text-white data-[active=true]:bg-white/20 data-[active=true]:text-white rounded-lg transition-all duration-200 py-2 text-sm"
-                    >
-                      <Bell className="w-4 h-4" />
-                      <span className="font-medium">Notifications</span>
-                      {effectiveUnreadCount > 0 && (
-                        <Badge variant="secondary" className="ml-auto bg-red-500 text-white text-xs px-2 py-1">
-                          {effectiveUnreadCount}
-                        </Badge>
-                      )}
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                </>
-              ) : (
-                menuItems.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      isActive={currentPage === item.url}
-                      onClick={() => handlePageChange(item.url)}
-                      className="text-white hover:bg-white/10 hover:text-white data-[active=true]:bg-white/20 data-[active=true]:text-white rounded-lg transition-all duration-200 py-2 text-sm"
-                    >
-                      <item.icon className="w-4 h-4" />
-                      <span className="font-medium truncate">{item.title}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))
-              )}
+              {menuItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton
+                    isActive={currentPage === item.url}
+                    onClick={() => handlePageChange(item.url)}
+                    className="text-white hover:bg-white/10 hover:text-white data-[active=true]:bg-white/20 data-[active=true]:text-white rounded-lg transition-all duration-200 py-2 text-sm"
+                  >
+                    <item.icon className="w-4 h-4" />
+                    <span className="font-medium truncate">{item.title}</span>
+                    {item.url === "notifications" && effectiveUnreadCount > 0 && (
+                      <Badge variant="secondary" className="ml-auto bg-red-500 text-white text-xs px-2 py-1">
+                        {effectiveUnreadCount}
+                      </Badge>
+                    )}
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

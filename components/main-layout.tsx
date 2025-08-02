@@ -13,7 +13,10 @@ import { GasSales } from "@/components/pages/gas-sales"
 import { EmployeeManagement } from "@/components/pages/employee-management"
 import { CylinderManagement } from "@/components/pages/cylinder-management"
 import { Reports } from "@/components/pages/reports"
+import ProfitLoss from "@/components/pages/profit-loss"
 import { EmployeeDashboard } from "@/components/pages/employee-dashboard"
+import { EmployeeGasSales } from "@/components/pages/employee-gas-sales"
+import { EmployeeCylinderSales } from "@/components/pages/employee-cylinder-sales"
 import { Notifications } from "@/components/pages/notifications"
 import { authAPI } from "@/lib/api"
 
@@ -51,8 +54,13 @@ export function MainLayout({ user, onLogout }: MainLayoutProps) {
   const renderPage = () => {
     if (user.role === "employee") {
       switch (currentPage) {
+        case "employee-gas-sales":
+          return <EmployeeGasSales user={user} />
+        case "employee-cylinder-sales":
+          return <EmployeeCylinderSales user={user} />
         case "notifications":
           return <Notifications user={user} setUnreadCount={setUnreadCount} />
+        case "dashboard":
         default:
           return <EmployeeDashboard user={user} setUnreadCount={setUnreadCount} />
       }
@@ -79,6 +87,8 @@ export function MainLayout({ user, onLogout }: MainLayoutProps) {
         return <CylinderManagement />
       case "reports":
         return <Reports />
+      case "profit-loss":
+        return <ProfitLoss />
       default:
         return <Dashboard />
     }
