@@ -104,8 +104,10 @@ export function CylinderManagement() {
     switch (activeTab) {
       case 'deposit':
         return [...baseColumns, 'depositAmount', ...commonColumns]
-      case 'refill':
-        return [...baseColumns, 'refillAmount', ...commonColumns]
+      case 'refill': {
+        const columnsToHide = ['amount', 'depositAmount', 'refillAmount', 'returnAmount', 'paymentMethod', 'cashAmount', 'bankName', 'checkNumber', 'status'];
+        return [...baseColumns, ...commonColumns].filter(col => !columnsToHide.includes(col));
+      }
       case 'return':
         return [...baseColumns, 'returnAmount', ...commonColumns]
       case 'all':
@@ -954,8 +956,12 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
                       <SelectValue placeholder="Select size" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="small">Small</SelectItem>
-                      <SelectItem value="large">Large</SelectItem>
+                      <SelectItem value="5kg">5kg</SelectItem>
+                      <SelectItem value="10kg">10kg</SelectItem>
+                      <SelectItem value="15kg">15kg</SelectItem>
+                      <SelectItem value="20kg">20kg</SelectItem>
+                      <SelectItem value="25kg">25kg</SelectItem>
+                      <SelectItem value="45kg">45kg</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -983,187 +989,134 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="amount">Amount *</Label>
-                  <Input
-                    id="amount"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.amount}
-                    onChange={(e) => {
-                      const newAmount = Number.parseFloat(e.target.value) || 0
-                      setFormData({ ...formData, amount: newAmount })
-                      
-                      // Auto-update status based on amount and deposit amount
-                      if (formData.type === "deposit" && formData.depositAmount > 0) {
-                        updateStatusBasedOnAmounts(newAmount, formData.depositAmount)
-                      }
-                    }}
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Payment Method Section - Available for all transaction types */}
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="paymentMethod">Security Type</Label>
-                  <Select
-                    value={formData.paymentMethod}
-                    onValueChange={(value: "cash" | "cheque") =>
-                      setFormData({ ...formData, paymentMethod: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select payment method" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="cash">Cash</SelectItem>
-                      <SelectItem value="cheque">Cheque</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {formData.paymentMethod === "cash" && (
+                {formData.type !== 'refill' && (
                   <div className="space-y-2">
-                    <Label htmlFor="cashAmount">Security Cash </Label>
+                    <Label htmlFor="amount">Amount *</Label>
                     <Input
-                      id="cashAmount"
+                      id="amount"
                       type="number"
                       step="0.01"
                       min="0"
-                      value={formData.cashAmount}
-                      onChange={(e) =>
-                        setFormData({ ...formData, cashAmount: Number.parseFloat(e.target.value) || 0 })
-                      }
-                      placeholder="Enter cash amount"
+                      value={formData.amount}
+                      onChange={(e) => {
+                        const newAmount = Number.parseFloat(e.target.value) || 0
+                        setFormData({ ...formData, amount: newAmount })
+                        
+                        // Auto-update status based on amount and deposit amount
+                        if (formData.type === "deposit" && formData.depositAmount > 0) {
+                          updateStatusBasedOnAmounts(newAmount, formData.depositAmount)
+                        }
+                      }}
+                      required
                     />
                   </div>
                 )}
-
-                {formData.paymentMethod === "cheque" && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="bankName">Bank Name</Label>
-                      <Input
-                        id="bankName"
-                        type="text"
-                        value={formData.bankName}
-                        onChange={(e) =>
-                          setFormData({ ...formData, bankName: e.target.value })
-                        }
-                        placeholder="Enter bank name"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="checkNumber">Check Number</Label>
-                      <Input
-                        id="checkNumber"
-                        type="text"
-                        value={formData.checkNumber}
-                        onChange={(e) =>
-                          setFormData({ ...formData, checkNumber: e.target.value })
-                        }
-                        placeholder="Enter check number"
-                      />
-                    </div>
-                  </div>
-                )}
               </div>
 
-              {/* Transaction-specific amount fields */}
-              {formData.type === "deposit" && (
-                <div className="space-y-2">
-                  <Label htmlFor="depositAmount">Deposit Amount</Label>
-                  <Input
-                    id="depositAmount"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.depositAmount}
-                    onChange={(e) => {
-                      const newDepositAmount = Number.parseFloat(e.target.value) || 0
-                      setFormData({ ...formData, depositAmount: newDepositAmount })
-                      
-                      // Auto-update status based on amount and deposit amount
-                      if (formData.amount > 0) {
-                        updateStatusBasedOnAmounts(formData.amount, newDepositAmount)
+              {/* Payment Method, Status, and Notes Section */}
+              {formData.type !== 'refill' && (
+                <div className="space-y-4">
+                  {/* Payment Method */}
+                  <div className="space-y-2">
+                    <Label htmlFor="paymentMethod">Security Type</Label>
+                    <Select
+                      value={formData.paymentMethod}
+                      onValueChange={(value: 'cash' | 'cheque') =>
+                        setFormData({ ...formData, paymentMethod: value })
                       }
-                    }}
-                    placeholder="Enter deposit amount"
-                  />
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select payment method" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="cash">Cash</SelectItem>
+                        <SelectItem value="cheque">Cheque</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {formData.paymentMethod === 'cash' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="cashAmount">Security Cash</Label>
+                      <Input
+                        id="cashAmount"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={formData.cashAmount}
+                        onChange={(e) =>
+                          setFormData({ ...formData, cashAmount: Number.parseFloat(e.target.value) || 0 })
+                        }
+                        placeholder="Enter cash amount"
+                      />
+                    </div>
+                  )}
+
+                  {formData.paymentMethod === 'cheque' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="bankName">Bank Name</Label>
+                        <Input
+                          id="bankName"
+                          type="text"
+                          value={formData.bankName}
+                          onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
+                          placeholder="Enter bank name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="checkNumber">Check Number</Label>
+                        <Input
+                          id="checkNumber"
+                          type="text"
+                          value={formData.checkNumber}
+                          onChange={(e) => setFormData({ ...formData, checkNumber: e.target.value })}
+                          placeholder="Enter check number"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Status */}
+                  <div className="space-y-2">
+                    <Label htmlFor="status">Status</Label>
+                    <Select
+                      value={formData.status}
+                      onValueChange={(value: 'pending' | 'cleared' | 'overdue') =>
+                        setFormData({ ...formData, status: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="cleared">Cleared</SelectItem>
+                        <SelectItem value="overdue">Overdue</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               )}
 
-              {formData.type === "refill" && (
-                <div className="space-y-2">
-                  <Label htmlFor="refillAmount">Refill Amount</Label>
-                  <Input
-                    id="refillAmount"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.refillAmount}
-                    onChange={(e) => setFormData({ ...formData, refillAmount: Number.parseFloat(e.target.value) || 0 })}
-                    placeholder="Enter refill amount"
-                  />
-                </div>
-              )}
-
-              {formData.type === "return" && (
-                <div className="space-y-2">
-                  <Label htmlFor="returnAmount">Return Amount</Label>
-                  <Input
-                    id="returnAmount"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.returnAmount}
-                    onChange={(e) => setFormData({ ...formData, returnAmount: Number.parseFloat(e.target.value) || 0 })}
-                    placeholder="Enter return amount"
-                  />
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="status">Status</Label>
-                  <Select
-                    value={formData.status}
-                    onValueChange={(value: "pending" | "cleared" | "overdue") =>
-                      setFormData({ ...formData, status: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="cleared">Cleared</SelectItem>
-                      <SelectItem value="overdue">Overdue</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="notes">Notes</Label>
-                  <Textarea
-                    id="notes"
-                    value={formData.notes}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    placeholder="Additional notes..."
-                    rows={3}
-                  />
-                </div>
+              {/* Notes Section - always visible */}
+              <div className="space-y-2">
+                <Label htmlFor="notes">Notes</Label>
+                <Textarea
+                  id="notes"
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  placeholder="Additional notes..."
+                  rows={3}
+                />
               </div>
 
-              <div className="flex justify-end gap-3">
+              <div className="flex justify-end gap-3 pt-4">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancel
                 </Button>
                 <Button type="submit" className="bg-[#2B3068] hover:bg-[#1a1f4a] text-white">
-                  {editingTransaction ? "Update Transaction" : "Create Transaction"}
+                  {editingTransaction ? 'Update Transaction' : 'Create Transaction'}
                 </Button>
               </div>
             </form>
@@ -1201,29 +1154,32 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
         </CardHeader>
         <CardContent className="p-0">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-4 m-4 mb-0">
-              <TabsTrigger value="all">All</TabsTrigger>
-              <TabsTrigger value="deposit">Deposits</TabsTrigger>
-              <TabsTrigger value="refill">Refills</TabsTrigger>
-              <TabsTrigger value="return">Returns</TabsTrigger>
-            </TabsList>
-            <TabsContent value={activeTab} className="mt-0">
+            <div className="border-b border-gray-200 px-6">
+              <TabsList className="bg-transparent p-0 -mb-px">
+                <TabsTrigger value="all" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-[#2B3068] rounded-none text-base font-semibold px-4 py-3">All</TabsTrigger>
+                <TabsTrigger value="deposit" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-blue-600 rounded-none text-base font-semibold px-4 py-3">Deposits</TabsTrigger>
+                <TabsTrigger value="refill" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-green-600 rounded-none text-base font-semibold px-4 py-3">Refills</TabsTrigger>
+                <TabsTrigger value="return" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-orange-600 rounded-none text-base font-semibold px-4 py-3">Returns</TabsTrigger>
+              </TabsList>
+            </div>
+            <TabsContent value={activeTab} className="p-0">
               <div className="overflow-x-auto">
                 <Table>
-                  <TableHeader>
+                  <TableHeader className="bg-gray-50">
                     <TableRow>
                       {renderTableHeaders()}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredTransactions.map((transaction) => (
-                      <TableRow key={transaction._id}>
-                        {renderTableCells(transaction)}
-                      </TableRow>
-                    ))}
-                    {filteredTransactions.length === 0 && (
+                    {filteredTransactions.length > 0 ? (
+                      filteredTransactions.map((transaction) => (
+                        <TableRow key={transaction._id} className="hover:bg-gray-50">
+                          {renderTableCells(transaction)}
+                        </TableRow>
+                      ))
+                    ) : (
                       <TableRow>
-                        <TableCell colSpan={getVisibleColumns().length} className="text-center py-8 text-gray-500">
+                        <TableCell colSpan={getVisibleColumns().length} className="h-24 text-center text-lg text-gray-500">
                           No transactions found.
                         </TableCell>
                       </TableRow>
@@ -1235,26 +1191,23 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
           </Tabs>
         </CardContent>
       </Card>
-      
-      {/* Signature Dialog */}
-      <SignatureDialog 
-        isOpen={showSignatureDialog}
-        onClose={handleSignatureCancel}
-        onSignatureComplete={handleSignatureComplete}
-        customerName={pendingTransaction?.customer?.name}
-      />
 
-      {/* Receipt Dialog with signature */}
+      {/* Receipt Dialog */}
       {receiptDialogData && (
         <ReceiptDialog
           sale={receiptDialogData}
-          signature={customerSignature}
-          onClose={() => {
-            setReceiptDialogData(null)
-            // Don't clear signature - keep it for reuse
-          }}
+          onClose={() => setReceiptDialogData(null)}
+        />
+      )}
+
+      {/* Signature Dialog */}
+      {showSignatureDialog && (
+        <SignatureDialog
+          isOpen={showSignatureDialog}
+          onClose={handleSignatureCancel}
+          onSignatureComplete={handleSignatureComplete}
         />
       )}
     </div>
-  )
+  );
 }
