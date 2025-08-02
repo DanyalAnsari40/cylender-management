@@ -1,5 +1,6 @@
 import dbConnect from "@/lib/mongodb";
 import CylinderTransaction from "@/models/Cylinder";
+import Product from "@/models/Product";
 import { NextResponse } from "next/server";
 
 export async function GET(request, { params }) {
@@ -38,38 +39,53 @@ export async function GET(request, { params }) {
 export async function PUT(request, { params }) {
   try {
     await dbConnect();
-  } catch (error) {
-    console.error("Database connection error:", error);
-    return NextResponse.json(
-      { error: "Database connection failed", details: error.message },
-      { status: 500 }
-    );
-  }
-
-  try {
     const { id } = params;
     const data = await request.json();
-    
-    const transaction = await CylinderTransaction.findByIdAndUpdate(
-      id,
-      data,
-      { new: true, runValidators: true }
-    ).populate("customer", "name phone address email");
-    
-    if (!transaction) {
-      return NextResponse.json(
-        { error: "Cylinder transaction not found" },
-        { status: 404 }
-      );
+
+    // Find the original transaction to revert stock changes
+    const originalTransaction = await CylinderTransaction.findById(id);
+
+    if (originalTransaction && originalTransaction.product) {
+      const originalProduct = await Product.findById(originalTransaction.product);
+      if (originalProduct) {
+        const originalQuantity = Number(originalTransaction.quantity) || 0;
+        if (originalTransaction.type === 'return') {
+          originalProduct.currentStock -= originalQuantity;
+        } else {
+          originalProduct.currentStock += originalQuantity;
+        }
+        await originalProduct.save();
+      }
     }
 
-    return NextResponse.json(transaction);
+    // Update the transaction with new data
+    const updatedTransaction = await CylinderTransaction.findByIdAndUpdate(id, data, { new: true, runValidators: true });
+
+    if (!updatedTransaction) {
+      return NextResponse.json({ error: "Cylinder transaction not found" }, { status: 404 });
+    }
+
+    // Apply the new stock change
+    if (updatedTransaction.product) {
+      const newProduct = await Product.findById(updatedTransaction.product);
+      if (newProduct) {
+        const newQuantity = Number(updatedTransaction.quantity) || 0;
+        if (updatedTransaction.type === 'return') {
+          newProduct.currentStock += newQuantity;
+        } else {
+          newProduct.currentStock -= newQuantity;
+        }
+        await newProduct.save();
+      }
+    }
+
+    const populatedTransaction = await CylinderTransaction.findById(id)
+      .populate("customer", "name phone address")
+      .populate("product", "name category cylinderType");
+
+    return NextResponse.json(populatedTransaction);
   } catch (error) {
-    console.error("Cylinder PUT error:", error);
-    return NextResponse.json(
-      { error: "Failed to update cylinder transaction", details: error.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
@@ -86,9 +102,25 @@ export async function DELETE(request, { params }) {
 
   try {
     const { id } = params;
-    const transaction = await CylinderTransaction.findByIdAndDelete(id);
+    // Find the transaction to revert stock changes before deleting
+    const transactionToDelete = await CylinderTransaction.findById(id);
+
+    if (transactionToDelete && transactionToDelete.product) {
+      const product = await Product.findById(transactionToDelete.product);
+      if (product) {
+        const quantity = Number(transactionToDelete.quantity) || 0;
+        if (transactionToDelete.type === 'return') {
+          product.currentStock -= quantity; // It was a return, so subtract the quantity that was added
+        } else {
+          product.currentStock += quantity; // It was a deposit/refill, so add back the quantity that was removed
+        }
+        await product.save();
+      }
+    }
+
+    const deletedTransaction = await CylinderTransaction.findByIdAndDelete(id);
     
-    if (!transaction) {
+    if (!deletedTransaction) {
       return NextResponse.json(
         { error: "Cylinder transaction not found" },
         { status: 404 }

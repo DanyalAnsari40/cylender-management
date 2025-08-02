@@ -17,12 +17,24 @@ export async function GET() {
   try {
     const transactions = await CylinderTransaction.find({})
       .populate("customer", "name phone address email")
+      .populate({
+        path: "product",
+        select: "name category cylinderType",
+        options: { strictPopulate: false }
+      })
       .sort({ createdAt: -1 });
     
     console.log(`Fetched ${transactions.length} cylinder transactions`);
+    console.log('Sample transaction:', transactions[0] ? {
+      id: transactions[0]._id,
+      hasProduct: !!transactions[0].product,
+      productName: transactions[0].product?.name || 'No product'
+    } : 'No transactions found');
+    
     return NextResponse.json({ data: transactions });
   } catch (error) {
     console.error("Cylinders GET error:", error);
+    console.error("Error stack:", error.stack);
     return NextResponse.json(
       { error: "Failed to fetch cylinder transactions", details: error.message },
       { status: 500 }
@@ -55,7 +67,8 @@ export async function POST(request) {
 
     const transaction = await CylinderTransaction.create(data);
     const populatedTransaction = await CylinderTransaction.findById(transaction._id)
-      .populate("customer", "name phone address email");
+      .populate("customer", "name phone address email")
+      .populate("product", "name category cylinderType");
 
     return NextResponse.json(populatedTransaction, { status: 201 });
   } catch (error) {

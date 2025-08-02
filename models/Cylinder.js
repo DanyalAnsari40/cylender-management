@@ -12,6 +12,11 @@ const CylinderTransactionSchema = new mongoose.Schema(
       ref: "Customer",
       required: true,
     },
+    product: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Product",
+      required: false,
+    },
     cylinderSize: {
       type: String,
       required: true,

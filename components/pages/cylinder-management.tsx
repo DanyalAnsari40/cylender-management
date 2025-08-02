@@ -28,6 +28,12 @@ interface CylinderTransaction {
     phone: string
     address: string
   }
+  product?: {
+    _id: string
+    name: string
+    category: string
+    cylinderType?: string
+  }
   cylinderSize: string
   quantity: number
   amount: number
@@ -86,9 +92,13 @@ export function CylinderManagement() {
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false)
   const [filteredSearchSuggestions, setFilteredSearchSuggestions] = useState<Customer[]>([])
 
+  // Stock validation popup state
+  const [showStockValidationPopup, setShowStockValidationPopup] = useState(false)
+  const [stockValidationMessage, setStockValidationMessage] = useState("")
+
   // Dynamic column visibility based on active tab
   const getVisibleColumns = () => {
-    const baseColumns = ['type', 'customer', 'cylinderSize', 'quantity', 'amount']
+    const baseColumns = ['type', 'customer', 'product', 'cylinderSize', 'quantity', 'amount']
     const commonColumns = ['paymentMethod', 'cashAmount', 'bankName', 'checkNumber', 'notes', 'status', 'date', 'actions']
     
     switch (activeTab) {
@@ -110,6 +120,7 @@ export function CylinderManagement() {
     const columnHeaders = {
       type: 'Type',
       customer: 'Customer',
+      product: 'Product',
       cylinderSize: 'Cylinder Size',
       quantity: 'Quantity',
       amount: 'Amount',
@@ -117,7 +128,7 @@ export function CylinderManagement() {
       refillAmount: 'Refill Amount',
       returnAmount: 'Return Amount',
       paymentMethod: 'Payment Method',
-      cashAmount: 'Cash Amount',
+      cashAmount: 'Security Cash',
       bankName: 'Bank Name',
       checkNumber: 'Check Number',
       notes: 'Notes',
@@ -154,6 +165,17 @@ export function CylinderManagement() {
           </div>
         </TableCell>
       ),
+      product: () => {
+        const productName = transaction.product?.name || "Unknown Product"
+        
+        return (
+          <TableCell className="p-4">
+            <div className="font-medium">
+              {productName}
+            </div>
+          </TableCell>
+        )
+      },
       cylinderSize: () => (
         <TableCell className="p-4 font-medium">
           {transaction.cylinderSize}
@@ -357,8 +379,7 @@ export function CylinderManagement() {
       const transactionData = {
         type: formData.type,
         customer: formData.customerId, // This will be sent as 'customer' to match API expectation
-        productId: formData.productId,
-        productName: formData.productName,
+        product: formData.productId,
         cylinderSize: formData.cylinderSize,
         quantity: Number(formData.quantity) || 0,
         amount: Number(formData.amount) || 0,
@@ -581,6 +602,37 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
   const handleCustomerInputFocus = () => {
     if (customerSearchTerm.trim().length > 0 && filteredCustomerSuggestions.length > 0) {
       setShowCustomerSuggestions(true)
+    }
+  }
+
+  // Stock validation function
+  const validateStock = (productId: string, requestedQuantity: number) => {
+    const selectedProduct = products.find(p => p._id === productId)
+    if (!selectedProduct) {
+      setStockValidationMessage("Product not found")
+      setShowStockValidationPopup(true)
+      return false
+    }
+
+    if (requestedQuantity > selectedProduct.currentStock) {
+      setStockValidationMessage(
+        `Insufficient stock! Available: ${selectedProduct.currentStock}, Requested: ${requestedQuantity}`
+      )
+      setShowStockValidationPopup(true)
+      return false
+    }
+
+    return true
+  }
+
+  // Auto-status logic based on Amount and Deposit Amount
+  const updateStatusBasedOnAmounts = (amount: number, depositAmount: number) => {
+    if (formData.type === "deposit" && depositAmount > 0) {
+      if (depositAmount >= amount) {
+        setFormData(prev => ({ ...prev, status: "cleared" }))
+      } else {
+        setFormData(prev => ({ ...prev, status: "pending" }))
+      }
     }
   }
 
@@ -867,7 +919,14 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
                 <Label htmlFor="product">Product *</Label>
                 <Select
                   value={formData.productId}
-                  onValueChange={(value) => setFormData({ ...formData, productId: value })}
+                  onValueChange={(value) => {
+                    const selectedProduct = products.find(p => p._id === value)
+                    setFormData({ 
+                      ...formData, 
+                      productId: value,
+                      productName: selectedProduct ? selectedProduct.name : ""
+                    })
+                  }}
                   required
                 >
                   <SelectTrigger>
@@ -908,7 +967,18 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
                     type="number"
                     min="1"
                     value={formData.quantity}
-                    onChange={(e) => setFormData({ ...formData, quantity: Number.parseInt(e.target.value) || 1 })}
+                    onChange={(e) => {
+                      const newQuantity = Number.parseInt(e.target.value) || 1
+                      
+                      // Validate stock if product is selected
+                      if (formData.productId && newQuantity > 0) {
+                        if (validateStock(formData.productId, newQuantity)) {
+                          setFormData({ ...formData, quantity: newQuantity })
+                        }
+                      } else {
+                        setFormData({ ...formData, quantity: newQuantity })
+                      }
+                    }}
                     required
                   />
                 </div>
@@ -921,7 +991,15 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
                     step="0.01"
                     min="0"
                     value={formData.amount}
-                    onChange={(e) => setFormData({ ...formData, amount: Number.parseFloat(e.target.value) || 0 })}
+                    onChange={(e) => {
+                      const newAmount = Number.parseFloat(e.target.value) || 0
+                      setFormData({ ...formData, amount: newAmount })
+                      
+                      // Auto-update status based on amount and deposit amount
+                      if (formData.type === "deposit" && formData.depositAmount > 0) {
+                        updateStatusBasedOnAmounts(newAmount, formData.depositAmount)
+                      }
+                    }}
                     required
                   />
                 </div>
@@ -1004,7 +1082,15 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
                     step="0.01"
                     min="0"
                     value={formData.depositAmount}
-                    onChange={(e) => setFormData({ ...formData, depositAmount: Number.parseFloat(e.target.value) || 0 })}
+                    onChange={(e) => {
+                      const newDepositAmount = Number.parseFloat(e.target.value) || 0
+                      setFormData({ ...formData, depositAmount: newDepositAmount })
+                      
+                      // Auto-update status based on amount and deposit amount
+                      if (formData.amount > 0) {
+                        updateStatusBasedOnAmounts(formData.amount, newDepositAmount)
+                      }
+                    }}
                     placeholder="Enter deposit amount"
                   />
                 </div>
@@ -1083,6 +1169,30 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
             </form>
           </DialogContent>
         </Dialog>
+
+        {/* Stock Validation Popup */}
+        {showStockValidationPopup && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={() => setShowStockValidationPopup(false)} />
+            <div className="relative bg-white rounded-2xl shadow-2xl p-8 mx-4 max-w-md w-full transform transition-all duration-300 scale-100 animate-in fade-in-0 zoom-in-95">
+              <div className="flex items-center justify-center w-16 h-16 mx-auto mb-4 bg-gradient-to-r from-red-500 to-red-600 rounded-full">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <div className="text-center">
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Stock Validation Error</h3>
+                <p className="text-gray-600 mb-6">{stockValidationMessage}</p>
+                <button
+                  onClick={() => setShowStockValidationPopup(false)}
+                  className="w-full bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold py-3 px-6 rounded-lg hover:from-red-600 hover:to-red-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl"
+                >
+                  Got It
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <Card className="border-0 shadow-lg">

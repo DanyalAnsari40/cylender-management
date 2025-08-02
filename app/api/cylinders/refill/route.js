@@ -1,5 +1,6 @@
 import dbConnect from "@/lib/mongodb";
 import CylinderTransaction from "@/models/Cylinder";
+import Product from "@/models/Product";
 import Customer from "@/models/Customer";
 import { NextResponse } from "next/server";
 
@@ -35,7 +36,17 @@ export async function POST(request) {
 
     const transaction = await CylinderTransaction.create(transactionData);
     const populatedTransaction = await CylinderTransaction.findById(transaction._id)
-      .populate("customer", "name phone address email");
+      .populate("customer", "name phone address email")
+      .populate("product", "name category cylinderType");
+
+    // Update product stock
+    if (data.product && data.quantity) {
+      const product = await Product.findById(data.product);
+      if (product) {
+        product.currentStock -= Number(data.quantity);
+        await product.save();
+      }
+    }
 
     return NextResponse.json(populatedTransaction, { status: 201 });
   } catch (error) {
