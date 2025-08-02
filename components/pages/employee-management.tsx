@@ -115,17 +115,22 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
 
   const checkForNewNotifications = async () => {
     try {
+      console.log('Checking for notifications for admin user:', user.id)
       const response = await fetch('/api/notifications?userId=' + user.id + '&type=stock_returned&unread=true')
       if (response.ok) {
         const data = await response.json()
+        console.log('Received notifications:', data)
         if (data.length > 0) {
           const latestNotification = data[0]
+          console.log('Showing notification for:', latestNotification)
           showNotification(`Stock returned by ${latestNotification.sender?.name || 'Employee'}: ${latestNotification.message}`)
           // Mark notification as read
           await fetch(`/api/notifications/${latestNotification._id}/read`, { method: 'PUT' })
           // Refresh stock assignments to show updated data
-          fetchStockAssignments()
+          await fetchStockAssignments()
         }
+      } else {
+        console.error('Failed to fetch notifications, status:', response.status)
       }
     } catch (error) {
       console.error('Failed to check notifications:', error)

@@ -17,10 +17,18 @@ export function EmployeeDashboard({ user, setUnreadCount }: EmployeeDashboardPro
   const [assignedStock, setAssignedStock] = useState<any[]>([])
   const [notifications, setNotifications] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [notification, setNotification] = useState<{ message: string; visible: boolean }>({ message: "", visible: false })
 
   useEffect(() => {
     if (user?.id) {
       fetchEmployeeData()
+      
+      // Poll for notifications every 5 seconds
+      const notificationInterval = setInterval(() => {
+        checkForNewNotifications()
+      }, 5000)
+      
+      return () => clearInterval(notificationInterval)
     }
   }, [user?.id])
 
@@ -44,6 +52,37 @@ export function EmployeeDashboard({ user, setUnreadCount }: EmployeeDashboardPro
     } finally {
       setLoading(false)
     }
+  }
+
+  const checkForNewNotifications = async () => {
+    try {
+      console.log('Checking for notifications for employee user:', user.id)
+      const response = await fetch('/api/notifications?userId=' + user.id + '&type=stock_assignment&unread=true')
+      if (response.ok) {
+        const data = await response.json()
+        console.log('Received notifications:', data)
+        if (data.length > 0) {
+          const latestNotification = data[0]
+          console.log('Showing notification for:', latestNotification)
+          showNotification(`New stock assignment: ${latestNotification.message}`)
+          // Mark notification as read
+          await fetch(`/api/notifications/${latestNotification._id}/read`, { method: 'PUT' })
+          // Refresh employee data to show updated assignments
+          await fetchEmployeeData()
+        }
+      } else {
+        console.error('Failed to fetch notifications, status:', response.status)
+      }
+    } catch (error) {
+      console.error('Failed to check notifications:', error)
+    }
+  }
+
+  const showNotification = (message: string) => {
+    setNotification({ message, visible: true })
+    setTimeout(() => {
+      setNotification({ message: "", visible: false })
+    }, 5000)
   }
 
   const handleReceiveStock = async (assignmentId: string) => {
@@ -259,6 +298,17 @@ export function EmployeeDashboard({ user, setUnreadCount }: EmployeeDashboardPro
           </div>
         </CardContent>
       </Card>
+
+      {/* Notification Popup */}
+      {notification.visible && (
+        <div className="fixed top-4 right-4 z-50 bg-green-500 text-white px-6 py-4 rounded-lg shadow-lg max-w-md">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="w-5 h-5" />
+            <span className="font-medium">Stock Assignment Notification</span>
+          </div>
+          <p className="mt-1 text-sm">{notification.message}</p>
+        </div>
+      )}
     </div>
   )
 }
