@@ -7,23 +7,37 @@ import User from "@/models/User"
 export async function GET(request) {
   try {
     await dbConnect()
-    
+
     const { searchParams } = new URL(request.url)
     const employeeId = searchParams.get('employeeId')
-    
-    if (!employeeId) {
-      return NextResponse.json({ error: "Employee ID is required" }, { status: 400 })
+    const fetchAll = searchParams.get('all') === 'true'
+
+    let query = {}
+
+    if (fetchAll) {
+      // No additional filter, fetch all transactions for admin view
+    } else if (employeeId) {
+      query = { employee: employeeId }
+    } else {
+      return NextResponse.json(
+        { error: "Employee ID is required, or specify 'all=true' for admin access." },
+        { status: 400 }
+      )
     }
 
-    const transactions = await EmployeeCylinderTransaction.find({ employee: employeeId })
-      .populate("customer", "name email phone")
-      .populate("employee", "name email")
+    const transactions = await EmployeeCylinderTransaction.find(query)
+      .populate('customer', 'name phone address')
+      .populate('employee', 'name')
+      .populate('product')
       .sort({ createdAt: -1 })
 
-    return NextResponse.json(transactions)
+    return NextResponse.json({ success: true, data: transactions })
   } catch (error) {
-    console.error("Error fetching employee cylinder transactions:", error)
-    return NextResponse.json({ error: "Failed to fetch employee cylinder transactions" }, { status: 500 })
+    console.error('Error fetching employee cylinder transactions:', error)
+    return NextResponse.json(
+      { success: false, error: 'Failed to fetch employee cylinder transactions' },
+      { status: 500 }
+    )
   }
 }
 
@@ -38,6 +52,7 @@ export async function POST(request) {
       employeeId,
       type,
       customer,
+      product, // Added product
       cylinderSize,
       quantity,
       amount,
@@ -53,7 +68,7 @@ export async function POST(request) {
     } = body
 
     // Validate required fields
-    if (!employeeId || !type || !customer || !cylinderSize || !quantity || !amount) {
+    if (!employeeId || !type || !customer || !product || !cylinderSize || !quantity) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
@@ -67,6 +82,7 @@ export async function POST(request) {
       type,
       employee: employeeId,
       customer,
+      product, // Added product
       cylinderSize,
       quantity: parseInt(quantity),
       amount: parseFloat(amount),

@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Plus, Edit, Trash2, Search, Filter, Cylinder, RotateCcw, ArrowDown, ArrowUp } from "lucide-react"
-import { cylindersAPI, customersAPI, productsAPI } from "@/lib/api"
+import { cylindersAPI, customersAPI, productsAPI, employeeCylindersAPI } from "@/lib/api"
 import { CustomerDropdown } from "@/components/ui/customer-dropdown"
 import { ReceiptDialog } from "@/components/receipt-dialog"
 import { SignatureDialog } from "@/components/signature-dialog"
@@ -48,6 +48,11 @@ interface CylinderTransaction {
   notes?: string
   createdAt: string
   updatedAt: string
+  isEmployeeTransaction?: boolean
+  employee?: {
+    _id: string
+    name: string
+  }
 }
 
 interface Customer {
@@ -164,6 +169,11 @@ export function CylinderManagement() {
           <div>
             <div className="font-medium">{transaction.customer?.name || "Unknown Customer"}</div>
             <div className="text-sm text-gray-500">{transaction.customer?.phone}</div>
+            {transaction.isEmployeeTransaction && (
+              <div className="text-xs text-blue-600 font-medium mt-1">
+                👤 Employee: {transaction.employee?.name || "Unknown Employee"}
+              </div>
+            )}
           </div>
         </TableCell>
       ),
@@ -265,7 +275,7 @@ export function CylinderManagement() {
             <Button
               size="sm"
               variant="outline"
-              onClick={() => handleDelete(transaction._id)}
+              onClick={() => handleDelete(transaction._id, transaction.isEmployeeTransaction)}
               className="text-red-600 border-red-600 hover:bg-red-600 hover:text-white"
             >
               <Trash2 className="w-4 h-4" />
@@ -275,10 +285,14 @@ export function CylinderManagement() {
       )
     }
 
-    return visibleColumns.map(column => {
-      const renderer = cellRenderers[column as keyof typeof cellRenderers]
-      return renderer ? renderer() : null
-    })
+    return (
+      <>
+        {visibleColumns.map(column => {
+          const renderer = cellRenderers[column as keyof typeof cellRenderers]
+          return renderer ? renderer() : null
+        })}
+      </>
+    )
   }
 
   // Form state
@@ -322,20 +336,28 @@ export function CylinderManagement() {
       setLoading(true)
       
       // Fetch data with individual error handling
-      let transactionsData = []
-      let customersData = []
-      let productsData = []
+      let transactionsData: CylinderTransaction[] = []
+      let customersData: Customer[] = []
+      let productsData: Product[] = []
       
       try {
-        const transactionsResponse = await cylindersAPI.getAll()
-        transactionsData = Array.isArray(transactionsResponse.data?.data) 
-          ? transactionsResponse.data.data 
-          : Array.isArray(transactionsResponse.data) 
-            ? transactionsResponse.data 
-            : Array.isArray(transactionsResponse) 
-              ? transactionsResponse 
-              : []
+        // Fetch both admin and employee cylinder transactions
+        const [adminTransactionsResponse, employeeTransactionsResponse] = await Promise.all([
+          cylindersAPI.getAll(),
+          employeeCylindersAPI.getAll({ all: true })
+        ])
+        
+        // Process admin transactions
+        const adminTransactions = adminTransactionsResponse.data?.data || []
 
+        const employeeTransactions = (employeeTransactionsResponse.data?.data || []).map((t: CylinderTransaction) => ({
+          ...t,
+          isEmployeeTransaction: true,
+        }))
+        
+        // Combine both transaction types
+        transactionsData = [...adminTransactions, ...employeeTransactions]
+        
       } catch (error) {
         console.error("Failed to fetch transactions:", error)
         transactionsData = []
@@ -487,18 +509,22 @@ export function CylinderManagement() {
     setIsDialogOpen(true)
   }
 
-  const handleDelete = async (id: string) => {
-    if (confirm("Are you sure you want to delete this transaction?")) {
+  const handleDelete = async (id: string, isEmployee?: boolean) => {
+    if (window.confirm("Are you sure you want to delete this transaction?")) {
       try {
-        await cylindersAPI.delete(id)
-        await fetchData()
+        if (isEmployee) {
+          await employeeCylindersAPI.delete(id)
+        } else {
+          await cylindersAPI.delete(id)
+        }
+        fetchData()
       } catch (error) {
         console.error("Failed to delete transaction:", error)
-        alert("Failed to delete transaction")
       }
     }
   }
-const handleReceiptClick = (transaction: CylinderTransaction) => {
+
+  const handleReceiptClick = (transaction: CylinderTransaction) => {
     if (transaction.type === "return") return;
 
     if (!customerSignature) {
@@ -968,12 +994,8 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
                       <SelectValue placeholder="Select size" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="5kg">5kg</SelectItem>
-                      <SelectItem value="10kg">10kg</SelectItem>
-                      <SelectItem value="15kg">15kg</SelectItem>
-                      <SelectItem value="20kg">20kg</SelectItem>
-                      <SelectItem value="25kg">25kg</SelectItem>
-                      <SelectItem value="45kg">45kg</SelectItem>
+                      <SelectItem value="small">Small</SelectItem>
+                      <SelectItem value="large">Large</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

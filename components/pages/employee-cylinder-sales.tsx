@@ -23,12 +23,24 @@ interface Customer {
   name: string
   email: string
   phone: string
+  address?: string
+}
+
+interface Product {
+  _id: string
+  name: string
+  category: "gas" | "cylinder"
+  cylinderType?: "large" | "small"
+  costPrice: number
+  leastPrice: number
+  currentStock: number
 }
 
 interface CylinderTransaction {
   _id: string
   type: string
   customer: Customer
+  product?: Product
   cylinderSize: string
   quantity: number
   amount: number
@@ -42,6 +54,7 @@ interface CylinderTransaction {
   status: string
   notes: string
   createdAt: string
+  securityAmount?: number // Added for optional use
 }
 
 // Cylinder size mapping for display
@@ -58,6 +71,8 @@ const CYLINDER_SIZE_DISPLAY = {
 export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
   const [transactions, setTransactions] = useState<CylinderTransaction[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
+  const [products, setProducts] = useState<Product[]>([])
+  const [stockAssignments, setStockAssignments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("all")
@@ -71,6 +86,7 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
   const [formData, setFormData] = useState({
     type: "deposit",
     customer: "",
+    product: "",
     cylinderSize: "small",
     quantity: 1,
     amount: 0,
@@ -82,24 +98,29 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
     bankName: "",
     checkNumber: "",
     status: "pending",
-    notes: ""
+    notes: "",
+    securityAmount: 0 // Added for security deposit
   })
 
   useEffect(() => {
     fetchData()
+    fetchProducts()
   }, [user.id])
 
   const fetchData = async () => {
     try {
       setLoading(true)
-      const [transactionsResponse, customersResponse] = await Promise.all([
+      const [transactionsResponse, customersResponse, productsResponse, stockAssignmentsResponse] = await Promise.all([
         fetch(`/api/employee-cylinders?employeeId=${user.id}`),
-        fetch("/api/customers")
+        fetch("/api/customers"),
+        fetch("/api/products"),
+        fetch(`/api/stock-assignments?employeeId=${user.id}&status=received`)
       ])
 
       if (transactionsResponse.ok) {
         const transactionsData = await transactionsResponse.json()
-        setTransactions(Array.isArray(transactionsData) ? transactionsData : [])
+        const transactions = transactionsData.data || transactionsData
+        setTransactions(Array.isArray(transactions) ? transactions : [])
       } else {
         console.error("Failed to fetch transactions:", transactionsResponse.status)
         setTransactions([])
@@ -107,21 +128,53 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
 
       if (customersResponse.ok) {
         const customersData = await customersResponse.json()
-        // API returns { data: customers }, so extract the data property
         const customers = customersData.data || customersData
         setCustomers(Array.isArray(customers) ? customers : [])
       } else {
         console.error("Failed to fetch customers:", customersResponse.status)
         setCustomers([])
       }
+
+      if (productsResponse.ok) {
+        const productsData = await productsResponse.json()
+        const products = productsData.data || productsData
+        // Only set cylinder products
+        const cylinderProducts = Array.isArray(products) ? products.filter((p: any) => p.category === "cylinder") : []
+        setProducts(cylinderProducts)
+      } else {
+        console.error("Failed to fetch products:", productsResponse.status)
+        setProducts([])
+      }
+
+      if (stockAssignmentsResponse.ok) {
+        const stockData = await stockAssignmentsResponse.json()
+        const assignments = stockData.data || stockData
+        setStockAssignments(Array.isArray(assignments) ? assignments : [])
+      } else {
+        console.error("Failed to fetch stock assignments:", stockAssignmentsResponse.status)
+        setStockAssignments([])
+      }
     } catch (error) {
       console.error("Error fetching data:", error)
-      toast.error("Failed to fetch data")
-      // Set default empty arrays on error
       setTransactions([])
       setCustomers([])
+      setProducts([])
+      setStockAssignments([])
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchProducts = async () => {
+    try {
+      const response = await fetch("/api/products")
+      const productsData = await response.json()
+      const products = productsData.data || productsData
+      // Only set cylinder products
+      const cylinderProducts = Array.isArray(products) ? products.filter((p: any) => p.category === "cylinder") : []
+      setProducts(cylinderProducts)
+    } catch (error) {
+      console.error("Failed to fetch products:", error)
     }
   }
 
@@ -129,6 +182,7 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
     setFormData({
       type: "deposit",
       customer: "",
+      product: "",
       cylinderSize: "small",
       quantity: 1,
       amount: 0,
@@ -140,76 +194,127 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
       bankName: "",
       checkNumber: "",
       status: "pending",
-      notes: ""
+      notes: "",
+      securityAmount: 0 // Added for security deposit
     })
     setCustomerSearch("")
     setShowCustomerSuggestions(false)
     setFilteredCustomers([])
   }
 
-  // Customer search functions
   const handleCustomerSearchChange = (value: string) => {
     setCustomerSearch(value)
-    
-    if (value.trim().length > 0) {
-      const filtered = customers.filter(customer => 
+    if (value.trim()) {
+      const filtered = customers.filter(customer =>
         customer.name.toLowerCase().includes(value.toLowerCase()) ||
         customer.email.toLowerCase().includes(value.toLowerCase()) ||
-        customer.phone.toLowerCase().includes(value.toLowerCase())
-      )
+        customer.phone.includes(value)
+      ).slice(0, 5)
       setFilteredCustomers(filtered)
-      setShowCustomerSuggestions(filtered.length > 0)
+      setShowCustomerSuggestions(true)
     } else {
-      setFilteredCustomers([])
       setShowCustomerSuggestions(false)
+      setFilteredCustomers([])
+      setFormData(prev => ({ ...prev, customer: "" }))
     }
   }
 
   const handleCustomerSuggestionClick = (customer: Customer) => {
-    setFormData({...formData, customer: customer._id})
     setCustomerSearch(customer.name)
+    setFormData(prev => ({ ...prev, customer: customer._id }))
     setShowCustomerSuggestions(false)
     setFilteredCustomers([])
   }
 
   const handleCustomerInputFocus = () => {
-    if (customerSearch.trim().length > 0 && filteredCustomers.length > 0) {
+    if (customerSearch.trim() && filteredCustomers.length > 0) {
       setShowCustomerSuggestions(true)
     }
   }
 
   const handleCustomerInputBlur = () => {
-    // Delay hiding suggestions to allow click events
     setTimeout(() => {
       setShowCustomerSuggestions(false)
     }, 200)
   }
 
+  const handleSelectChange = (name: string, value: string) => {
+    setFormData((prev) => {
+      const newState = { ...prev, [name]: value };
+
+      // When transaction type changes, reset amount fields
+      if (name === 'type') {
+        newState.amount = 0;
+        newState.depositAmount = 0;
+        newState.refillAmount = 0;
+        newState.returnAmount = 0;
+      }
+
+      return newState;
+    });
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    const numericValue = value === '' ? 0 : parseFloat(value);
+
+    setFormData((prev) => {
+      const newState = { ...prev, [name]: name === 'notes' || name === 'bankName' || name === 'checkNumber' ? value : numericValue };
+
+      // Sync the main 'amount' field with the specific amount field being changed
+      if (['depositAmount', 'refillAmount', 'returnAmount'].includes(name)) {
+        newState.amount = numericValue;
+      }
+
+      return newState;
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!formData.customer || !formData.cylinderSize || formData.quantity <= 0 || formData.amount <= 0) {
+    // Enhanced validation
+    if (!formData.customer || !formData.product || !formData.cylinderSize || formData.quantity <= 0) {
       toast.error("Please fill in all required fields")
       return
     }
+
+    // Get selected product for validation
+    const selectedProduct = products.find(p => p._id === formData.product)
+    if (!selectedProduct) {
+      toast.error("Please select a valid product")
+      return
+    }
+
+    // Calculate total received stock for this product
+    const totalReceivedStock = stockAssignments
+      .filter(sa => sa.product._id === formData.product)
+      .reduce((sum, sa) => sum + (sa.remainingQuantity || 0), 0)
+
+    if (totalReceivedStock < formData.quantity) {
+      toast.error(`Insufficient assigned stock for ${selectedProduct.name}. Available: ${totalReceivedStock}, Requested: ${formData.quantity}`)
+      return
+    }
+
+    // Calculate amount based on least price and quantity
+    const calculatedAmount = selectedProduct.leastPrice * formData.quantity
 
     try {
       const transactionData = {
         employeeId: user.id,
         type: formData.type,
         customer: formData.customer,
+        product: formData.product,
         cylinderSize: formData.cylinderSize,
         quantity: formData.quantity,
-        amount: formData.amount,
-        depositAmount: formData.depositAmount,
-        refillAmount: formData.refillAmount,
-        returnAmount: formData.returnAmount,
+        amount: calculatedAmount,
+        depositAmount: formData.type === "deposit" ? calculatedAmount : 0,
+        refillAmount: formData.type === "refill" ? calculatedAmount : 0,
+        returnAmount: formData.type === "return" ? calculatedAmount : 0,
         paymentMethod: formData.paymentMethod,
-        ...(formData.paymentMethod === "cash" && { cashAmount: formData.cashAmount }),
-        ...(formData.paymentMethod === "cheque" && {
-          bankName: formData.bankName,
-          checkNumber: formData.checkNumber
-        }),
+        cashAmount: formData.paymentMethod === "cash" ? calculatedAmount : 0,
+        bankName: formData.paymentMethod === "cheque" ? formData.bankName : "",
+        checkNumber: formData.paymentMethod === "cheque" ? formData.checkNumber : "",
         status: formData.status,
         notes: formData.notes
       }
@@ -237,164 +342,347 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
     }
   }
 
+  // Handle edit transaction
+  const handleEdit = (transaction: CylinderTransaction) => {
+    setFormData({
+      type: transaction.type,
+      customer: transaction.customer?._id || '',
+      product: transaction.product?._id || '',
+      cylinderSize: transaction.cylinderSize,
+      quantity: transaction.quantity,
+      amount: transaction.amount,
+      depositAmount: transaction.depositAmount || 0,
+      refillAmount: transaction.refillAmount || 0,
+      returnAmount: transaction.returnAmount || 0,
+      paymentMethod: transaction.paymentMethod || 'cash',
+      cashAmount: transaction.cashAmount || 0,
+      bankName: transaction.bankName || '',
+      checkNumber: transaction.checkNumber || '',
+      status: transaction.status,
+      notes: transaction.notes || '',
+      securityAmount: transaction.securityAmount || 0
+    })
+    setCustomerSearch(transaction.customer?.name || '')
+    setIsDialogOpen(true)
+  }
+
+  // Handle delete transaction
+  const handleDelete = async (transactionId: string) => {
+    if (!confirm('Are you sure you want to delete this transaction?')) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/employee-cylinders/${transactionId}`, {
+        method: 'DELETE'
+      })
+
+      if (response.ok) {
+        toast.success('Transaction deleted successfully!')
+        await fetchData()
+      } else {
+        toast.error('Failed to delete transaction')
+      }
+    } catch (error) {
+      console.error('Error deleting transaction:', error)
+      toast.error('Error deleting transaction')
+    }
+  }
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "cleared":
-        return <Badge className="bg-green-100 text-green-800">Cleared</Badge>
+        return "bg-green-100 text-green-800"
       case "pending":
-        return <Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>
+        return "bg-yellow-100 text-yellow-800"
       case "overdue":
-        return <Badge className="bg-red-100 text-red-800">Overdue</Badge>
+        return "bg-red-100 text-red-800"
       default:
-        return <Badge>{status}</Badge>
+        return "bg-gray-100 text-gray-800"
     }
   }
 
   const getPaymentMethodBadge = (method: string) => {
     return method === "cash" ? 
-      <Badge className="bg-blue-100 text-blue-800">Cash</Badge> : 
-      <Badge className="bg-purple-100 text-purple-800">Cheque</Badge>
+      "bg-blue-100 text-blue-800" : 
+      "bg-purple-100 text-purple-800"
   }
 
+  // Filter transactions based on active tab
   const getFilteredTransactions = () => {
-    if (activeTab === "all") return transactions
-    return transactions.filter(t => t.type === activeTab)
+    if (activeTab === 'all') {
+      return transactions
+    }
+    return transactions.filter(transaction => transaction.type === activeTab)
   }
 
+
+
+  // Get visible columns based on active tab
   const getVisibleColumns = () => {
-    const baseColumns = ["type", "customer", "cylinderSize", "quantity", "amount"]
-    const transactionSpecific = activeTab === "all" ? 
-      ["depositAmount", "refillAmount", "returnAmount"] :
-      activeTab === "deposit" ? ["depositAmount"] :
-      activeTab === "refill" ? ["refillAmount"] :
-      ["returnAmount"]
-    const commonColumns = ["paymentMethod", "cashAmount", "bankName", "checkNumber", "notes", "status", "date", "actions"]
+    const baseColumns = ['type', 'customer', 'product', 'cylinderSize', 'quantity', 'amount']
+    const paymentColumns = ['paymentMethod', 'cashAmount', 'bankName', 'checkNumber']
+    const commonColumns = ['notes', 'status', 'date', 'actions']
     
-    return [...baseColumns, ...transactionSpecific, ...commonColumns]
+    let amountColumns: string[] = []
+    if (activeTab === 'all') {
+      amountColumns = ['depositAmount', 'refillAmount', 'returnAmount']
+    } else if (activeTab === 'deposit') {
+      amountColumns = ['depositAmount']
+    } else if (activeTab === 'refill') {
+      amountColumns = ['refillAmount']
+    } else if (activeTab === 'return') {
+      amountColumns = ['returnAmount']
+    }
+    
+    return [...baseColumns, ...amountColumns, ...paymentColumns, ...commonColumns]
   }
 
+  // Render table headers based on visible columns
   const renderTableHeaders = () => {
     const visibleColumns = getVisibleColumns()
+    const columnHeaders: { [key: string]: string } = {
+      type: 'Type',
+      customer: 'Customer',
+      product: 'Product',
+      cylinderSize: 'Cylinder Size',
+      quantity: 'Quantity',
+      amount: 'Amount (AED)',
+      depositAmount: 'Deposit Amount (AED)',
+      refillAmount: 'Refill Amount (AED)',
+      returnAmount: 'Return Amount (AED)',
+      paymentMethod: 'Security Type',
+      cashAmount: 'Cash Amount (AED)',
+      bankName: 'Bank Name',
+      checkNumber: 'Check Number',
+      notes: 'Notes',
+      status: 'Status',
+      date: 'Date',
+      actions: 'Actions'
+    }
+
     return (
       <TableRow>
-        {visibleColumns.includes("type") && <TableHead>Type</TableHead>}
-        {visibleColumns.includes("customer") && <TableHead>Customer</TableHead>}
-        {visibleColumns.includes("cylinderSize") && <TableHead>Cylinder Size</TableHead>}
-        {visibleColumns.includes("quantity") && <TableHead>Quantity</TableHead>}
-        {visibleColumns.includes("amount") && <TableHead>Amount</TableHead>}
-        {visibleColumns.includes("depositAmount") && <TableHead>Deposit Amount</TableHead>}
-        {visibleColumns.includes("refillAmount") && <TableHead>Refill Amount</TableHead>}
-        {visibleColumns.includes("returnAmount") && <TableHead>Return Amount</TableHead>}
-        {visibleColumns.includes("paymentMethod") && <TableHead>Payment Method</TableHead>}
-        {visibleColumns.includes("cashAmount") && <TableHead>Cash Amount</TableHead>}
-        {visibleColumns.includes("bankName") && <TableHead>Bank Name</TableHead>}
-        {visibleColumns.includes("checkNumber") && <TableHead>Check Number</TableHead>}
-        {visibleColumns.includes("notes") && <TableHead>Notes</TableHead>}
-        {visibleColumns.includes("status") && <TableHead>Status</TableHead>}
-        {visibleColumns.includes("date") && <TableHead>Date</TableHead>}
-        {visibleColumns.includes("actions") && <TableHead>Actions</TableHead>}
+        {visibleColumns.map((column) => (
+          <TableHead key={column} className="text-left font-semibold">
+            {columnHeaders[column]}
+          </TableHead>
+        ))}
       </TableRow>
     )
   }
 
+  // Render table cells for a transaction
   const renderTableCells = (transaction: CylinderTransaction) => {
     const visibleColumns = getVisibleColumns()
+
+    const cellRenderers: { [key: string]: () => JSX.Element } = {
+      type: () => (
+        <TableCell className="p-4">
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+            transaction.type === 'deposit' ? 'bg-blue-100 text-blue-800' :
+            transaction.type === 'refill' ? 'bg-green-100 text-green-800' :
+            'bg-purple-100 text-purple-800'
+          }`}>
+            {transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1)}
+          </span>
+        </TableCell>
+      ),
+      customer: () => (
+        <TableCell className="p-4">
+          <div>
+            <div className="font-medium">{transaction.customer.name}</div>
+            <div className="text-sm text-gray-500">{transaction.customer.phone}</div>
+          </div>
+        </TableCell>
+      ),
+      product: () => (
+        <TableCell className="p-4">
+          {transaction.product ? transaction.product.name : 'N/A'}
+        </TableCell>
+      ),
+      cylinderSize: () => (
+        <TableCell className="p-4">
+          {transaction.cylinderSize}
+        </TableCell>
+      ),
+      quantity: () => (
+        <TableCell className="p-4">
+          {transaction.quantity}
+        </TableCell>
+      ),
+      amount: () => (
+        <TableCell className="p-4">
+          AED {transaction.amount.toFixed(2)}
+        </TableCell>
+      ),
+      depositAmount: () => (
+        <TableCell className="p-4">
+          AED {transaction.depositAmount.toFixed(2)}
+        </TableCell>
+      ),
+      refillAmount: () => (
+        <TableCell className="p-4">
+          AED {transaction.refillAmount.toFixed(2)}
+        </TableCell>
+      ),
+      returnAmount: () => (
+        <TableCell className="p-4">
+          AED {transaction.returnAmount.toFixed(2)}
+        </TableCell>
+      ),
+      paymentMethod: () => (
+        <TableCell className="p-4">
+          <Badge className={getPaymentMethodBadge(transaction.paymentMethod)}>
+            {transaction.paymentMethod.charAt(0).toUpperCase() + transaction.paymentMethod.slice(1)}
+          </Badge>
+        </TableCell>
+      ),
+      cashAmount: () => (
+        <TableCell className="p-4">
+          AED {transaction.cashAmount.toFixed(2)}
+        </TableCell>
+      ),
+      bankName: () => (
+        <TableCell className="p-4">
+          {transaction.bankName || 'N/A'}
+        </TableCell>
+      ),
+      checkNumber: () => (
+        <TableCell className="p-4">
+          {transaction.checkNumber || 'N/A'}
+        </TableCell>
+      ),
+      notes: () => (
+        <TableCell className="p-4">
+          {transaction.notes || 'N/A'}
+        </TableCell>
+      ),
+      status: () => (
+        <TableCell className="p-4">
+          <Badge className={getStatusBadge(transaction.status)}>
+            {transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}
+          </Badge>
+        </TableCell>
+      ),
+      date: () => (
+        <TableCell className="p-4">
+          {new Date(transaction.createdAt).toLocaleDateString()}
+        </TableCell>
+      ),
+      actions: () => (
+        <TableCell className="p-4">
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleEdit(transaction)}
+              className="h-8 px-2 text-xs"
+            >
+              Edit
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleDelete(transaction._id)}
+              className="h-8 px-2 text-xs text-red-600 hover:text-red-700"
+            >
+              Delete
+            </Button>
+          </div>
+        </TableCell>
+      )
+    }
+
     return (
       <TableRow key={transaction._id}>
-        {visibleColumns.includes("type") && (
-          <TableCell className="capitalize font-medium">{transaction.type}</TableCell>
-        )}
-        {visibleColumns.includes("customer") && (
-          <TableCell>{transaction.customer.name}</TableCell>
-        )}
-        {visibleColumns.includes("cylinderSize") && (
-          <TableCell>{CYLINDER_SIZE_DISPLAY[transaction.cylinderSize as keyof typeof CYLINDER_SIZE_DISPLAY] || transaction.cylinderSize}</TableCell>
-        )}
-        {visibleColumns.includes("quantity") && (
-          <TableCell>{transaction.quantity}</TableCell>
-        )}
-        {visibleColumns.includes("amount") && (
-          <TableCell>AED {transaction.amount}</TableCell>
-        )}
-        {visibleColumns.includes("depositAmount") && (
-          <TableCell>{transaction.depositAmount ? `AED ${transaction.depositAmount}` : "-"}</TableCell>
-        )}
-        {visibleColumns.includes("refillAmount") && (
-          <TableCell>{transaction.refillAmount ? `AED ${transaction.refillAmount}` : "-"}</TableCell>
-        )}
-        {visibleColumns.includes("returnAmount") && (
-          <TableCell>{transaction.returnAmount ? `AED ${transaction.returnAmount}` : "-"}</TableCell>
-        )}
-        {visibleColumns.includes("paymentMethod") && (
-          <TableCell>{getPaymentMethodBadge(transaction.paymentMethod)}</TableCell>
-        )}
-        {visibleColumns.includes("cashAmount") && (
-          <TableCell>{transaction.cashAmount ? `AED ${transaction.cashAmount}` : "-"}</TableCell>
-        )}
-        {visibleColumns.includes("bankName") && (
-          <TableCell>{transaction.bankName || "-"}</TableCell>
-        )}
-        {visibleColumns.includes("checkNumber") && (
-          <TableCell>{transaction.checkNumber || "-"}</TableCell>
-        )}
-        {visibleColumns.includes("notes") && (
-          <TableCell>
-            {transaction.notes ? (
-              <span title={transaction.notes}>
-                {transaction.notes.length > 20 ? `${transaction.notes.substring(0, 20)}...` : transaction.notes}
-              </span>
-            ) : "-"}
-          </TableCell>
-        )}
-        {visibleColumns.includes("status") && (
-          <TableCell>{getStatusBadge(transaction.status)}</TableCell>
-        )}
-        {visibleColumns.includes("date") && (
-          <TableCell>{new Date(transaction.createdAt).toLocaleDateString()}</TableCell>
-        )}
-        {visibleColumns.includes("actions") && (
-          <TableCell>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm">
-                <Edit className="w-4 h-4" />
-              </Button>
-            </div>
-          </TableCell>
-        )}
+        {visibleColumns.map((column) => cellRenderers[column]())}
       </TableRow>
     )
   }
 
-  if (loading) {
-    return <div className="p-6">Loading...</div>
-  }
 
-  return (
-    <div className="p-4 sm:p-6 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-[#2B3068]">Cylinder Sales</h1>
-          <p className="text-gray-600 text-sm sm:text-base">Manage your cylinder transactions</p>
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-[#2B3068] mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading cylinder transactions...</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="w-full sm:w-auto bg-[#2B3068] hover:bg-[#1a1f4a] text-white">
-              <Plus className="w-4 h-4 mr-2" />
-              New Transaction
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="w-[95vw] max-w-[600px] max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Create New Cylinder Transaction</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Transaction Type */}
-              <div className="space-y-2">
-                <Label htmlFor="type">Transaction Type *</Label>
-                <Select value={formData.type} onValueChange={(value) => setFormData({...formData, type: value})}>
+      </div>
+    )
+  }
+  return (
+  <div className="container mx-auto p-4 sm:p-6 lg:p-8">
+    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8">
+      <div className="mb-4 sm:mb-0">
+        <h1 className="text-3xl font-bold text-[#2B3068]">Employee Cylinder Sales</h1>
+        <p className="text-gray-500 mt-1">Manage your cylinder sales and transactions.</p>
+      </div>
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogTrigger asChild>
+          <Button className="bg-[#2B3068] text-white hover:bg-blue-800" onClick={() => resetForm()}>
+            <Plus className="mr-2 h-4 w-4" /> Create New Transaction
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="sm:max-w-[600px] bg-white shadow-2xl rounded-lg">
+          <DialogHeader>
+            <DialogTitle>Create New Cylinder Transaction</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-6 py-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Customer */}
+              <div className="relative">
+                <Label htmlFor="customer">Customer</Label>
+                <Input
+                  id="customer"
+                  type="text"
+                  value={customerSearch}
+                  onChange={(e) => handleCustomerSearchChange(e.target.value)}
+                  onFocus={handleCustomerInputFocus}
+                  onBlur={handleCustomerInputBlur}
+                  placeholder="Search for a customer..."
+                  autoComplete="off"
+                />
+                {showCustomerSuggestions && filteredCustomers.length > 0 && (
+                  <ul className="absolute z-50 w-full bg-white border border-gray-300 rounded-md mt-1 max-h-60 overflow-auto shadow-lg">
+                    {filteredCustomers.map((customer) => (
+                      <li
+                        key={customer._id}
+                        className="p-2 hover:bg-gray-100 cursor-pointer"
+                        onMouseDown={() => handleCustomerSuggestionClick(customer)}
+                      >
+                        {customer.name} ({customer.phone})
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* Product */}
+              <div>
+                <Label htmlFor="product">Product</Label>
+                <Select name="product" value={formData.product} onValueChange={(value) => handleSelectChange("product", value)}>
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Select a product" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {products.map((product) => (
+                      <SelectItem key={product._id} value={product._id}>
+                        {product.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Transaction Type */}
+              <div>
+                <Label htmlFor="type">Transaction Type</Label>
+                <Select value={formData.type} onValueChange={(value) => handleSelectChange("type", value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="deposit">Deposit</SelectItem>
@@ -404,125 +692,59 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
                 </Select>
               </div>
 
-              {/* Customer Selection with Autocomplete */}
-              <div className="space-y-2 relative">
-                <Label htmlFor="customer">Customer *</Label>
-                <Input
-                  id="customer"
-                  placeholder="Search by name, email, or phone..."
-                  value={customerSearch}
-                  onChange={(e) => handleCustomerSearchChange(e.target.value)}
-                  onFocus={handleCustomerInputFocus}
-                  onBlur={handleCustomerInputBlur}
-                  className="pr-10"
-                />
-                {showCustomerSuggestions && filteredCustomers.length > 0 && (
-                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                    {filteredCustomers.map((customer) => (
-                      <div
-                        key={customer._id}
-                        className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-                        onClick={() => handleCustomerSuggestionClick(customer)}
-                      >
-                        <div className="flex flex-col">
-                          <span className="font-medium text-gray-900">{customer.name}</span>
-                          <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
-                            <span>Email: {customer.email}</span>
-                            <span>Phone: {customer.phone}</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+              {/* Cylinder Size */}
+              <div>
+                <Label htmlFor="cylinderSize">Cylinder Size</Label>
+                <Select value={formData.cylinderSize} onValueChange={(value) => handleSelectChange("cylinderSize", value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select size" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="small">Small (5kg)</SelectItem>
+                    <SelectItem value="large">Large (45kg)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
-              {/* Cylinder Details */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Cylinder Size *</Label>
-                  <Select value={formData.cylinderSize} onValueChange={(value) => setFormData({...formData, cylinderSize: value})}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="small">Small</SelectItem>
-                      <SelectItem value="large">Large</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Quantity *</Label>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={formData.quantity}
-                    onChange={(e) => setFormData({...formData, quantity: parseInt(e.target.value) || 1})}
-                  />
-                </div>
-              </div>
-
-              {/* Amount */}
-              <div className="space-y-2">
-                <Label>Amount (AED) *</Label>
+              {/* Quantity */}
+              <div>
+                <Label htmlFor="quantity">Quantity</Label>
                 <Input
+                  id="quantity"
+                  name="quantity"
                   type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.amount}
-                  onChange={(e) => setFormData({...formData, amount: parseFloat(e.target.value) || 0})}
+                  value={formData.quantity}
+                  onChange={handleChange}
+                  className="w-full"
                 />
               </div>
 
-              {/* Transaction-specific amounts */}
-              {formData.type === "deposit" && (
-                <div className="space-y-2">
-                  <Label>Deposit Amount (AED)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.depositAmount}
-                    onChange={(e) => setFormData({...formData, depositAmount: parseFloat(e.target.value) || 0})}
-                    placeholder="Enter deposit amount"
-                  />
+              {/* Amount fields based on type */}
+              {formData.type === 'deposit' && (
+                <div>
+                  <Label htmlFor="depositAmount">Deposit Amount</Label>
+                  <Input id="depositAmount" name="depositAmount" type="number" value={formData.depositAmount} onChange={handleChange} />
                 </div>
               )}
-
-              {formData.type === "refill" && (
-                <div className="space-y-2">
-                  <Label>Refill Amount (AED)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.refillAmount}
-                    onChange={(e) => setFormData({...formData, refillAmount: parseFloat(e.target.value) || 0})}
-                    placeholder="Enter refill amount"
-                  />
+              {formData.type === 'refill' && (
+                <div>
+                  <Label htmlFor="refillAmount">Refill Amount</Label>
+                  <Input id="refillAmount" name="refillAmount" type="number" value={formData.refillAmount} onChange={handleChange} />
                 </div>
               )}
-
-              {formData.type === "return" && (
-                <div className="space-y-2">
-                  <Label>Return Amount (AED)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.returnAmount}
-                    onChange={(e) => setFormData({...formData, returnAmount: parseFloat(e.target.value) || 0})}
-                    placeholder="Enter return amount"
-                  />
+              {formData.type === 'return' && (
+                <div>
+                  <Label htmlFor="returnAmount">Return Amount</Label>
+                  <Input id="returnAmount" name="returnAmount" type="number" value={formData.returnAmount} onChange={handleChange} />
                 </div>
               )}
 
               {/* Payment Method */}
-              <div className="space-y-2">
-                <Label>Payment Method</Label>
-                <Select value={formData.paymentMethod} onValueChange={(value) => setFormData({...formData, paymentMethod: value})}>
+              <div>
+                <Label htmlFor="paymentMethod">Payment Method</Label>
+                <Select value={formData.paymentMethod} onValueChange={(value) => handleSelectChange("paymentMethod", value)}>
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Select payment method" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="cash">Cash</SelectItem>
@@ -531,164 +753,129 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
                 </Select>
               </div>
 
-              {/* Payment Method Fields */}
-              {formData.paymentMethod === "cash" && (
-                <div className="space-y-2">
-                  <Label>Cash Amount (AED)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.cashAmount}
-                    onChange={(e) => setFormData({...formData, cashAmount: parseFloat(e.target.value) || 0})}
-                  />
+              {formData.paymentMethod === 'cash' && (
+                <div>
+                  <Label htmlFor="cashAmount">Cash Amount</Label>
+                  <Input id="cashAmount" name="cashAmount" type="number" value={formData.cashAmount} onChange={handleChange} />
                 </div>
               )}
 
-              {formData.paymentMethod === "cheque" && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Bank Name</Label>
-                    <Input
-                      value={formData.bankName}
-                      onChange={(e) => setFormData({...formData, bankName: e.target.value})}
-                      placeholder="Enter bank name"
-                    />
+              {formData.paymentMethod === 'cheque' && (
+                <>
+                  <div>
+                    <Label htmlFor="bankName">Bank Name</Label>
+                    <Input id="bankName" name="bankName" value={formData.bankName} onChange={handleChange} />
                   </div>
-                  <div className="space-y-2">
-                    <Label>Check Number</Label>
-                    <Input
-                      value={formData.checkNumber}
-                      onChange={(e) => setFormData({...formData, checkNumber: e.target.value})}
-                      placeholder="Enter check number"
-                    />
+                  <div>
+                    <Label htmlFor="checkNumber">Check Number</Label>
+                    <Input id="checkNumber" name="checkNumber" value={formData.checkNumber} onChange={handleChange} />
                   </div>
-                </div>
+                </>
               )}
-
-              {/* Status */}
-              <div className="space-y-2">
-                <Label>Status</Label>
-                <Select value={formData.status} onValueChange={(value) => setFormData({...formData, status: value})}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="cleared">Cleared</SelectItem>
-                    <SelectItem value="overdue">Overdue</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Notes */}
-              <div className="space-y-2">
-                <Label>Notes</Label>
-                <Textarea
-                  value={formData.notes}
-                  onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                  placeholder="Additional notes..."
-                />
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-2 pt-4">
-                <Button type="submit" className="flex-1 bg-[#2B3068] hover:bg-[#1a1f4a]">
-                  Create Transaction
-                </Button>
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} className="flex-1">
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-0 shadow-lg">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Transactions</p>
-                <p className="text-2xl font-bold text-[#2B3068]">{transactions.length}</p>
-              </div>
-              <FileText className="w-8 h-8 text-[#2B3068]" />
             </div>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-lg">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                <p className="text-2xl font-bold text-green-600">
-                  AED {transactions.reduce((sum, t) => sum + t.amount, 0).toFixed(2)}
-                </p>
-              </div>
-              <DollarSign className="w-8 h-8 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-lg">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Pending</p>
-                <p className="text-2xl font-bold text-yellow-600">
-                  {transactions.filter(t => t.status === "pending").length}
-                </p>
-              </div>
-              <Package className="w-8 h-8 text-yellow-600" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-lg">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Overdue</p>
-                <p className="text-2xl font-bold text-red-600">
-                  {transactions.filter(t => t.status === "overdue").length}
-                </p>
-              </div>
-              <Package className="w-8 h-8 text-red-600" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
 
-      {/* Transactions Table */}
+            {/* Notes */}
+            <div>
+              <Label htmlFor="notes">Notes</Label>
+              <Textarea id="notes" name="notes" value={formData.notes} onChange={handleChange} />
+            </div>
+
+            <div className="flex justify-end pt-4">
+              <Button type="submit" className="bg-[#2B3068] text-white hover:bg-blue-800">
+                Create Transaction
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
+
+    {/* Summary Cards */}
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
       <Card className="border-0 shadow-lg">
-        <CardHeader className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] text-white rounded-t-lg">
-          <CardTitle>Cylinder Transactions</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <div className="p-4 border-b">
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="all">All</TabsTrigger>
-                <TabsTrigger value="deposit">Deposit</TabsTrigger>
-                <TabsTrigger value="refill">Refill</TabsTrigger>
-                <TabsTrigger value="return">Return</TabsTrigger>
-              </TabsList>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Total Transactions</p>
+              <p className="text-2xl font-bold text-[#2B3068]">{transactions.length}</p>
             </div>
-            <TabsContent value={activeTab} className="m-0">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    {renderTableHeaders()}
-                  </TableHeader>
-                  <TableBody>
-                    {getFilteredTransactions().map((transaction) => renderTableCells(transaction))}
-                    {getFilteredTransactions().length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={getVisibleColumns().length} className="text-center text-gray-500 py-8">
-                          No {activeTab === "all" ? "" : activeTab} transactions found.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
+            <FileText className="w-8 h-8 text-[#2B3068]" />
+          </div>
+        </CardContent>
+      </Card>
+      <Card className="border-0 shadow-lg">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Total Revenue</p>
+              <p className="text-2xl font-bold text-green-600">
+                AED {transactions.reduce((sum, t) => sum + (t.refillAmount || 0), 0).toFixed(2)}
+              </p>
+            </div>
+            <DollarSign className="w-8 h-8 text-green-600" />
+          </div>
+        </CardContent>
+      </Card>
+      <Card className="border-0 shadow-lg">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Pending</p>
+              <p className="text-2xl font-bold text-yellow-600">
+                {transactions.filter(t => t.status === "pending").length}
+              </p>
+            </div>
+            <Package className="w-8 h-8 text-yellow-600" />
+          </div>
+        </CardContent>
+      </Card>
+      <Card className="border-0 shadow-lg">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Cleared</p>
+              <p className="text-2xl font-bold text-green-600">
+                {transactions.filter(t => t.status === "cleared").length}
+              </p>
+            </div>
+            <Package className="w-8 h-8 text-green-600" />
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+
+    {/* Transactions Table */}
+    <Card className="border-0 shadow-lg">
+      <CardHeader className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] text-white rounded-t-lg p-4">
+        <CardTitle>Cylinder Transactions</CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <div className="p-4 border-b">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="all">All</TabsTrigger>
+              <TabsTrigger value="deposit">Deposit</TabsTrigger>
+              <TabsTrigger value="refill">Refill</TabsTrigger>
+              <TabsTrigger value="return">Return</TabsTrigger>
+            </TabsList>
+          </div>
+          <TabsContent value={activeTab} className="m-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  {renderTableHeaders()}
+                </TableHeader>
+                <TableBody>
+                  {getFilteredTransactions().length > 0 ? (
+                    getFilteredTransactions().map((transaction) => renderTableCells(transaction))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={getVisibleColumns().length} className="text-center text-gray-500 py-8">
+                        No {activeTab === "all" ? "" : activeTab} transactions found.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
                 </Table>
               </div>
             </TabsContent>
