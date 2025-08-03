@@ -42,6 +42,8 @@ interface AppSidebarProps {
   onLogout: () => void
   unreadCount?: number
   setUnreadCount?: (count: number) => void
+  creditAmount?: number
+  debitAmount?: number
 }
 
 const adminMenuItems = [
@@ -125,7 +127,7 @@ const employeeMenuItems = [
   },
 ]
 
-export function AppSidebar({ currentPage, onPageChange, user, onLogout, unreadCount: externalUnreadCount, setUnreadCount }: AppSidebarProps) {
+export function AppSidebar({ currentPage, onPageChange, user, onLogout, unreadCount: externalUnreadCount, setUnreadCount, creditAmount = 0, debitAmount = 0 }: AppSidebarProps) {
   const [notifications, setNotifications] = useState<any[]>([])
   const [unreadCount, setLocalUnreadCount] = useState(0)
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -213,8 +215,8 @@ export function AppSidebar({ currentPage, onPageChange, user, onLogout, unreadCo
             <div className="text-xs text-white/70 mb-2 truncate">{user?.email || ""}</div>
             {user?.role === "employee" && (
               <div className="flex justify-between text-xs">
-                <span className="text-green-300">Credit: $0</span>
-                <span className="text-red-300">Debit: $0</span>
+                <span className="text-green-300">Credit: AED {creditAmount.toFixed(2)}</span>
+                <span className="text-red-300">Debit: AED {debitAmount.toFixed(2)}</span>
               </div>
             )}
           </div>

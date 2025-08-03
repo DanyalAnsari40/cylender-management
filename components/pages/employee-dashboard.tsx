@@ -19,6 +19,9 @@ export function EmployeeDashboard({ user, setUnreadCount }: EmployeeDashboardPro
   const [notifications, setNotifications] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [notification, setNotification] = useState<{ message: string; visible: boolean }>({ message: "", visible: false })
+  const [salesData, setSalesData] = useState<any[]>([])
+  const [totalDebit, setTotalDebit] = useState(0)
+  const [totalCredit, setTotalCredit] = useState(0)
 
   useEffect(() => {
     if (user?.id) {
@@ -33,23 +36,48 @@ export function EmployeeDashboard({ user, setUnreadCount }: EmployeeDashboardPro
     }
   }, [user?.id])
 
+  // Debug effect to monitor state changes
+  useEffect(() => {
+    console.log('State updated - Debit:', totalDebit, 'Credit:', totalCredit)
+  }, [totalDebit, totalCredit])
+
   const fetchEmployeeData = async () => {
     try {
-      const [stockResponse, notificationsResponse] = await Promise.all([
+      const [stockResponse, notificationsResponse, salesResponse] = await Promise.all([
         stockAPI.getAll(),
         notificationsAPI.getAll(user.id),
+        fetch(`/api/employee-sales?employeeId=${user.id}`),
       ])
 
       // Filter stock assignments for current employee
       const stockData = Array.isArray(stockResponse.data) ? stockResponse.data : (stockResponse.data?.data || []);
-const employeeStock = stockData.filter((stock: any) => stock.employee?._id === user.id)
+      const employeeStock = stockData.filter((stock: any) => stock.employee?._id === user.id)
       setAssignedStock(employeeStock)
       setNotifications(notificationsResponse.data || [])
       if (setUnreadCount) setUnreadCount((notificationsResponse.data || []).filter((n: any) => !n.isRead).length)
+
+      // Fetch and process sales data
+      const salesData = await salesResponse.json()
+      
+      // API returns sales directly as an array, not wrapped in data property
+      const salesArray = Array.isArray(salesData) ? salesData : []
+      
+      setSalesData(salesArray)
+      
+      // Calculate Debit (Total Amount) and Credit (Received Amount)
+      const debit = salesArray.reduce((sum: number, sale: any) => sum + (sale.totalAmount || 0), 0)
+      const credit = salesArray.reduce((sum: number, sale: any) => sum + (sale.receivedAmount || 0), 0)
+      
+      setTotalDebit(debit)
+      setTotalCredit(credit)
+      
     } catch (error) {
       console.error("Failed to fetch employee data:", error)
       setAssignedStock([])
       setNotifications([])
+      setSalesData([])
+      setTotalDebit(0)
+      setTotalCredit(0)
       if (setUnreadCount) setUnreadCount(0)
     } finally {
       setLoading(false)
@@ -313,16 +341,16 @@ const employeeStock = stockData.filter((stock: any) => stock.employee?._id === u
         <CardContent className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="text-center p-4 bg-green-50 rounded-lg">
-              <div className="text-2xl font-bold text-green-600">${(user?.creditAmount || 0).toFixed(2)}</div>
-              <p className="text-sm text-gray-600">Total Credit</p>
+              <div className="text-2xl font-bold text-green-600">AED {totalCredit.toFixed(2)}</div>
+              <p className="text-sm text-gray-600">Total Credit (Received Amount)</p>
             </div>
             <div className="text-center p-4 bg-red-50 rounded-lg">
-              <div className="text-2xl font-bold text-red-600">${(user?.debitAmount || 0).toFixed(2)}</div>
-              <p className="text-sm text-gray-600">Total Debit</p>
+              <div className="text-2xl font-bold text-red-600">AED {totalDebit.toFixed(2)}</div>
+              <p className="text-sm text-gray-600">Total Debit (Total Amount)</p>
             </div>
             <div className="text-center p-4 bg-blue-50 rounded-lg">
               <div className="text-2xl font-bold text-[#2B3068]">
-                ${((user?.creditAmount || 0) - (user?.debitAmount || 0)).toFixed(2)}
+                AED {(totalCredit - totalDebit).toFixed(2)}
               </div>
               <p className="text-sm text-gray-600">Net Balance</p>
             </div>

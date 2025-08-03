@@ -39,10 +39,38 @@ export function MainLayout({ user, onLogout }: MainLayoutProps) {
   const [mounted, setMounted] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const [showLogoutConfirmation, setShowLogoutConfirmation] = useState(false)
+  const [creditAmount, setCreditAmount] = useState(0)
+  const [debitAmount, setDebitAmount] = useState(0)
 
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  // Fetch employee financial data if user is an employee
+  useEffect(() => {
+    const fetchEmployeeFinancialData = async () => {
+      if (user?.role === "employee" && user?.id) {
+        try {
+          const response = await fetch(`/api/employee-sales?employeeId=${user.id}`)
+          const salesData = await response.json()
+          const salesArray = Array.isArray(salesData) ? salesData : []
+          
+          // Calculate Debit (Total Amount) and Credit (Received Amount)
+          const debit = salesArray.reduce((sum: number, sale: any) => sum + (sale.totalAmount || 0), 0)
+          const credit = salesArray.reduce((sum: number, sale: any) => sum + (sale.receivedAmount || 0), 0)
+          
+          setDebitAmount(debit)
+          setCreditAmount(credit)
+        } catch (error) {
+          console.error("Failed to fetch employee financial data:", error)
+          setDebitAmount(0)
+          setCreditAmount(0)
+        }
+      }
+    }
+
+    fetchEmployeeFinancialData()
+  }, [user?.id, user?.role])
 
   const handleLogoutClick = () => {
     setShowLogoutConfirmation(true)
@@ -114,7 +142,7 @@ export function MainLayout({ user, onLogout }: MainLayoutProps) {
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full bg-gray-50">
-        <AppSidebar currentPage={currentPage} onPageChange={setCurrentPage} user={user} onLogout={handleLogoutClick} unreadCount={unreadCount} setUnreadCount={setUnreadCount} />
+        <AppSidebar currentPage={currentPage} onPageChange={setCurrentPage} user={user} onLogout={handleLogoutClick} unreadCount={unreadCount} setUnreadCount={setUnreadCount} creditAmount={creditAmount} debitAmount={debitAmount} />
         <main className="flex-1 overflow-auto">
           <div className="pt-16 lg:pt-0 p-3 sm:p-4 lg:p-6 xl:p-8">{renderPage()}</div>
         </main>
