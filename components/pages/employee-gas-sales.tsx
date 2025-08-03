@@ -751,7 +751,6 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
                   <TableHead>Invoice #</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead>Total Amount</TableHead>
-                  <TableHead>Least Price (Assigned)</TableHead>
                   <TableHead>Received Amount</TableHead>
                   <TableHead>Payment</TableHead>
                   <TableHead>Status</TableHead>
@@ -762,7 +761,7 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-gray-500 py-8">
+                    <TableCell colSpan={7} className="text-center text-gray-500 py-8">
                       <div className="flex justify-center items-center">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
                       </div>
@@ -774,17 +773,6 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
                       <TableCell className="font-medium">{sale.invoiceNumber}</TableCell>
                       <TableCell>{sale.customer.name}</TableCell>
                       <TableCell>AED {sale.totalAmount.toFixed(2)}</TableCell>
-                      <TableCell>
-                        {(() => {
-                          if (!sale.items || sale.items.length === 0) return <span className="text-gray-400">N/A</span>;
-                          // Find the minimum leastPrice among all items
-                          const minLeastPrice = Math.min(...sale.items.map(item => {
-                            // Try to get leastPrice from item.product.leastPrice or fallback to item.price
-                            return item.product?.leastPrice ?? item.price ?? 0;
-                          }));
-                          return minLeastPrice ? `AED ${minLeastPrice}` : <span className="text-gray-400">N/A</span>;
-                        })()}
-                      </TableCell>
                       <TableCell>AED {(sale.receivedAmount || 0).toFixed(2)}</TableCell>
                       <TableCell className="capitalize">{sale.paymentMethod}</TableCell>
                       <TableCell>{getPaymentStatusBadge(sale.paymentStatus)}</TableCell>

@@ -37,7 +37,7 @@ export async function POST(request) {
     await dbConnect()
     
     const body = await request.json()
-    const { employeeId, customer, items, totalAmount, paymentMethod, paymentStatus, notes, customerSignature } = body
+    const { employeeId, customer, items, totalAmount, paymentMethod, paymentStatus, notes, customerSignature, receivedAmount } = body
 
     // Validate required fields
     if (!employeeId || !customer || !items || items.length === 0) {
@@ -66,14 +66,29 @@ export async function POST(request) {
         }, { status: 400 })
       }
 
-      // Use product's cost price
-      const itemTotal = product.costPrice * item.quantity
+      // Get least price from employee's received inventory (stock assignments)
+      const stockAssignment = await StockAssignment.findOne({
+        employee: employeeId,
+        product: item.product,
+        status: "received",
+        remainingQuantity: { $gt: 0 }
+      }).sort({ createdAt: 1 }) // Get the oldest assignment first (FIFO)
+
+      if (!stockAssignment) {
+        return NextResponse.json({ 
+          error: `No received inventory found for ${product.name} for this employee` 
+        }, { status: 400 })
+      }
+
+      // Use least price from stock assignment
+      const leastPrice = stockAssignment.leastPrice
+      const itemTotal = leastPrice * item.quantity
       calculatedTotal += itemTotal
 
       validatedItems.push({
         product: item.product,
         quantity: item.quantity,
-        price: product.costPrice,
+        price: leastPrice,
         total: itemTotal
       })
     }
@@ -87,6 +102,7 @@ export async function POST(request) {
       totalAmount: calculatedTotal,
       paymentMethod: paymentMethod || "cash",
       paymentStatus: paymentStatus || "cleared",
+      receivedAmount: parseFloat(receivedAmount) || 0,
       notes: notes || "",
       customerSignature: customerSignature || ""
     })

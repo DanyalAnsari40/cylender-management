@@ -877,6 +877,7 @@ export function GasSales() {
                   <TableHead className="p-4">Customer</TableHead>
                   <TableHead className="p-4">Items</TableHead>
                   <TableHead className="p-4">Total (AED)</TableHead>
+                  <TableHead className="p-4">Received Amount (AED)</TableHead>
                   <TableHead className="p-4">Payment</TableHead>
                   <TableHead className="p-4">Status</TableHead>
                   <TableHead className="p-4">Added By</TableHead>
@@ -904,6 +905,7 @@ export function GasSales() {
                       </div>
                     </TableCell>
                     <TableCell className="p-4 font-semibold">AED {sale.totalAmount.toFixed(2)}</TableCell>
+                    <TableCell className="p-4 font-semibold">AED {(sale.receivedAmount || 0).toFixed(2)}</TableCell>
                     <TableCell className="p-4 capitalize">{sale.paymentMethod}</TableCell>
                     <TableCell className="p-4">
                       <Badge
