@@ -631,161 +631,179 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
             <DialogTitle>Create New Cylinder Transaction</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-6 py-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Customer */}
-              <div className="relative">
-                <Label htmlFor="customer">Customer</Label>
-                <Input
-                  id="customer"
-                  type="text"
-                  value={customerSearch}
-                  onChange={(e) => handleCustomerSearchChange(e.target.value)}
-                  onFocus={handleCustomerInputFocus}
-                  onBlur={handleCustomerInputBlur}
-                  placeholder="Search for a customer..."
-                  autoComplete="off"
-                />
-                {showCustomerSuggestions && filteredCustomers.length > 0 && (
-                  <ul className="absolute z-50 w-full bg-white border border-gray-300 rounded-md mt-1 max-h-60 overflow-auto shadow-lg">
-                    {filteredCustomers.map((customer) => (
-                      <li
-                        key={customer._id}
-                        className="p-2 hover:bg-gray-100 cursor-pointer"
-                        onMouseDown={() => handleCustomerSuggestionClick(customer)}
-                      >
-                        {customer.name} ({customer.phone})
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    {/* Transaction Type */}
+    <div>
+      <Label htmlFor="type">Transaction Type</Label>
+      <Select value={formData.type} onValueChange={(value) => handleSelectChange("type", value)}>
+        <SelectTrigger>
+          <SelectValue placeholder="Select type" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="deposit">Deposit</SelectItem>
+          <SelectItem value="refill">Refill</SelectItem>
+          <SelectItem value="return">Return</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
 
-              {/* Product */}
-              <div>
-                <Label htmlFor="product">Product</Label>
-                <Select name="product" value={formData.product} onValueChange={(value) => handleSelectChange("product", value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a product" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {products.map((product) => (
-                      <SelectItem key={product._id} value={product._id}>
-                        {product.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+    {/* Customer */}
+    <div className="relative">
+      <Label htmlFor="customer">Customer</Label>
+      <Input
+        id="customer"
+        type="text"
+        value={customerSearch}
+        onChange={(e) => handleCustomerSearchChange(e.target.value)}
+        onFocus={handleCustomerInputFocus}
+        onBlur={handleCustomerInputBlur}
+        placeholder="Search for a customer..."
+        autoComplete="off"
+      />
+      {showCustomerSuggestions && filteredCustomers.length > 0 && (
+        <ul className="absolute z-50 w-full bg-white border border-gray-300 rounded-md mt-1 max-h-60 overflow-auto shadow-lg">
+          {filteredCustomers.map((customer) => (
+            <li
+              key={customer._id}
+              className="p-2 hover:bg-gray-100 cursor-pointer"
+              onMouseDown={() => handleCustomerSuggestionClick(customer)}
+            >
+              {customer.name} ({customer.phone})
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
 
-              {/* Transaction Type */}
-              <div>
-                <Label htmlFor="type">Transaction Type</Label>
-                <Select value={formData.type} onValueChange={(value) => handleSelectChange("type", value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="deposit">Deposit</SelectItem>
-                    <SelectItem value="refill">Refill</SelectItem>
-                    <SelectItem value="return">Return</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+    {/* Product */}
+    <div>
+      <Label htmlFor="product">Product</Label>
+      <Select name="product" value={formData.product} onValueChange={(value) => handleSelectChange("product", value)}>
+        <SelectTrigger>
+          <SelectValue placeholder="Select a product" />
+        </SelectTrigger>
+        <SelectContent>
+          {products.map((product) => (
+            <SelectItem key={product._id} value={product._id}>
+              {product.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
 
-              {/* Cylinder Size */}
-              <div>
-                <Label htmlFor="cylinderSize">Cylinder Size</Label>
-                <Select value={formData.cylinderSize} onValueChange={(value) => handleSelectChange("cylinderSize", value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select size" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="small">Small (5kg)</SelectItem>
-                    <SelectItem value="large">Large (45kg)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+    {/* Cylinder Size */}
+    <div>
+      <Label htmlFor="cylinderSize">Cylinder Size</Label>
+      <Select value={formData.cylinderSize} onValueChange={(value) => handleSelectChange("cylinderSize", value)}>
+        <SelectTrigger>
+          <SelectValue placeholder="Select size" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="small">Small (5kg)</SelectItem>
+          <SelectItem value="large">Large (45kg)</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
 
-              {/* Quantity */}
-              <div>
-                <Label htmlFor="quantity">Quantity</Label>
-                <Input
-                  id="quantity"
-                  name="quantity"
-                  type="number"
-                  value={formData.quantity}
-                  onChange={handleChange}
-                  className="w-full"
-                />
-              </div>
+    {/* Quantity */}
+    <div>
+      <Label htmlFor="quantity">Quantity</Label>
+      <Input
+        id="quantity"
+        name="quantity"
+        type="number"
+        value={formData.quantity}
+        onChange={handleChange}
+        className="w-full"
+      />
+    </div>
 
-              {/* Amount fields based on type */}
-              {formData.type === 'deposit' && (
-                <div>
-                  <Label htmlFor="depositAmount">Deposit Amount</Label>
-                  <Input id="depositAmount" name="depositAmount" type="number" value={formData.depositAmount} onChange={handleChange} />
-                </div>
-              )}
-              {formData.type === 'refill' && (
-                <div>
-                  <Label htmlFor="refillAmount">Refill Amount</Label>
-                  <Input id="refillAmount" name="refillAmount" type="number" value={formData.refillAmount} onChange={handleChange} />
-                </div>
-              )}
-              {formData.type === 'return' && (
-                <div>
-                  <Label htmlFor="returnAmount">Return Amount</Label>
-                  <Input id="returnAmount" name="returnAmount" type="number" value={formData.returnAmount} onChange={handleChange} />
-                </div>
-              )}
+    {/* Amount */}
+    <div>
+      <Label htmlFor="amount">Amount</Label>
+      <Input
+        id="amount"
+        name="amount"
+        type="number"
+        value={formData.amount}
+        onChange={handleChange}
+        className="w-full"
+      />
+    </div>
 
-              {/* Payment Method */}
-              <div>
-                <Label htmlFor="paymentMethod">Payment Method</Label>
-                <Select value={formData.paymentMethod} onValueChange={(value) => handleSelectChange("paymentMethod", value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select payment method" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cash">Cash</SelectItem>
-                    <SelectItem value="cheque">Cheque</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+    {/* Security Type (Payment Method) - Only show if not refill */}
+    {formData.type !== 'refill' && (
+      <div>
+        <Label htmlFor="paymentMethod">Security Type</Label>
+        <Select value={formData.paymentMethod} onValueChange={(value) => handleSelectChange("paymentMethod", value)}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select security type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="cash">Cash</SelectItem>
+            <SelectItem value="cheque">Cheque</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    )}
 
-              {formData.paymentMethod === 'cash' && (
-                <div>
-                  <Label htmlFor="cashAmount">Cash Amount</Label>
-                  <Input id="cashAmount" name="cashAmount" type="number" value={formData.cashAmount} onChange={handleChange} />
-                </div>
-              )}
+    {/* Security Cash field (if cash) - Only show if not refill */}
+    {formData.type !== 'refill' && formData.paymentMethod === 'cash' && (
+      <div>
+        <Label htmlFor="cashAmount">Security Cash</Label>
+        <Input id="cashAmount" name="cashAmount" type="number" value={formData.cashAmount} onChange={handleChange} />
+      </div>
+    )}
 
-              {formData.paymentMethod === 'cheque' && (
-                <>
-                  <div>
-                    <Label htmlFor="bankName">Bank Name</Label>
-                    <Input id="bankName" name="bankName" value={formData.bankName} onChange={handleChange} />
-                  </div>
-                  <div>
-                    <Label htmlFor="checkNumber">Check Number</Label>
-                    <Input id="checkNumber" name="checkNumber" value={formData.checkNumber} onChange={handleChange} />
-                  </div>
-                </>
-              )}
-            </div>
+    {/* Cheque fields (if cheque) - Only show if not refill */}
+    {formData.type !== 'refill' && formData.paymentMethod === 'cheque' && (
+      <>
+        <div>
+          <Label htmlFor="bankName">Bank Name</Label>
+          <Input id="bankName" name="bankName" value={formData.bankName} onChange={handleChange} />
+        </div>
+        <div>
+          <Label htmlFor="checkNumber">Check Number</Label>
+          <Input id="checkNumber" name="checkNumber" value={formData.checkNumber} onChange={handleChange} />
+        </div>
+      </>
+    )}
 
-            {/* Notes */}
-            <div>
-              <Label htmlFor="notes">Notes</Label>
-              <Textarea id="notes" name="notes" value={formData.notes} onChange={handleChange} />
-            </div>
+    {/* Deposit Amount */}
+    <div>
+      <Label htmlFor="depositAmount">Deposit Amount</Label>
+      <Input id="depositAmount" name="depositAmount" type="number" value={formData.depositAmount} onChange={handleChange} />
+    </div>
 
-            <div className="flex justify-end pt-4">
-              <Button type="submit" className="bg-[#2B3068] text-white hover:bg-blue-800">
-                Create Transaction
-              </Button>
-            </div>
-          </form>
+    {/* Status */}
+    <div>
+      <Label htmlFor="status">Status</Label>
+      <Select value={formData.status} onValueChange={(value) => handleSelectChange("status", value)}>
+        <SelectTrigger>
+          <SelectValue placeholder="Select status" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="pending">Pending</SelectItem>
+          <SelectItem value="cleared">Cleared</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  </div>
+
+  {/* Notes */}
+  <div>
+    <Label htmlFor="notes">Notes</Label>
+    <Textarea id="notes" name="notes" value={formData.notes} onChange={handleChange} />
+  </div>
+
+  <div className="flex justify-end pt-4">
+    <Button type="submit" className="bg-[#2B3068] text-white hover:bg-blue-800">
+      Create Transaction
+    </Button>
+  </div>
+</form>
+
         </DialogContent>
       </Dialog>
     </div>
