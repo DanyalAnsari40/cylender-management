@@ -305,6 +305,18 @@ export function CylinderManagement() {
     fetchData()
   }, [])
 
+  useEffect(() => {
+    if (formData.type === 'deposit') {
+      const amount = Number(formData.amount) || 0;
+      const depositAmount = Number(formData.depositAmount) || 0;
+      if (depositAmount < amount) {
+        setFormData(prev => ({ ...prev, status: 'pending' }));
+      } else {
+        setFormData(prev => ({ ...prev, status: 'cleared' }));
+      }
+    }
+  }, [formData.amount, formData.depositAmount, formData.type]);
+
   const fetchData = async () => {
     try {
       setLoading(true)
@@ -385,7 +397,7 @@ export function CylinderManagement() {
         cylinderSize: formData.cylinderSize,
         quantity: Number(formData.quantity) || 0,
         amount: Number(formData.amount) || 0,
-        depositAmount: formData.type === 'deposit' ? Number(formData.amount) : 0,
+        depositAmount: formData.type === 'deposit' ? Number(formData.depositAmount) : 0,
         refillAmount: formData.type === 'refill' ? Number(formData.amount) : 0,
         returnAmount: formData.type === 'return' ? Number(formData.amount) : 0,
         paymentMethod: formData.paymentMethod,
@@ -1078,6 +1090,20 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
                   )}
 
                   {/* Status */}
+                  {(formData.type === 'deposit' || formData.type === 'return') && (
+                    <div className="space-y-2">
+                      <Label htmlFor="depositAmount">Deposit Amount</Label>
+                      <Input
+                        id="depositAmount"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={formData.depositAmount}
+                        onChange={(e) => setFormData({ ...formData, depositAmount: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+                  )}
+
                   <div className="space-y-2">
                     <Label htmlFor="status">Status</Label>
                     <Select
