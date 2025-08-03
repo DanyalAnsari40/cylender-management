@@ -13,11 +13,13 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url)
     const employeeId = searchParams.get('employeeId')
     
-    if (!employeeId) {
-      return NextResponse.json({ error: "Employee ID is required" }, { status: 400 })
+    let query = {}
+    if (employeeId) {
+      query = { employee: employeeId }
     }
+    // If no employeeId provided, fetch all employee sales (for admin panel)
 
-    const sales = await EmployeeSale.find({ employee: employeeId })
+    const sales = await EmployeeSale.find(query)
       .populate("customer", "name email phone")
       .populate("items.product", "name category")
       .populate("employee", "name email")

@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { salesAPI, customersAPI, productsAPI } from "@/lib/api"
+import employeeSalesAPI from "@/utils/apis/employeeSalesAPI"
 import { ReceiptDialog } from '@/components/receipt-dialog';
 import { ProductDropdown } from '@/components/ui/product-dropdown';
 import { Trash2 } from 'lucide-react';
@@ -33,6 +34,7 @@ interface Sale {
       _id: string
       name: string
       costPrice: number
+      leastPrice: number
     }
     quantity: number
     price: number
@@ -92,6 +94,7 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
     category: "gas",
     items: [{ productId: "", quantity: "", price: "" }],
     receivedAmount: "",
+    paymentMethod: "cash",
     paymentStatus: "cleared",
     notes: "",
   })
@@ -138,9 +141,7 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
       console.log('Employee stock assignments:', stockAssignmentsData)
       
       // Extract products from stock assignments with remaining quantities
-      const employeeProducts: Product[] = []
-      const allEmployeeProducts: Product[] = []
-      
+      const allEmployeeProducts: Product[] = [];
       if (stockAssignmentsData?.data && Array.isArray(stockAssignmentsData.data)) {
         stockAssignmentsData.data.forEach((assignment: any) => {
           if (assignment.product && assignment.remainingQuantity > 0) {
@@ -149,18 +150,19 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
               currentStock: assignment.remainingQuantity // Use remaining quantity as current stock
             }
             allEmployeeProducts.push(productWithStock)
-            
-            // Add to category-specific products if it matches
-            if (assignment.product.category === "gas") {
-              employeeProducts.push(productWithStock)
-            }
           }
         })
       }
-      
+      // Deduplicate products by _id
+      const dedupedAllProducts = Array.from(
+        new Map(allEmployeeProducts.map(p => [p._id, p])).values()
+      )
+      // Filter products for the current category
+      const initialCategory = formData.category || "gas";
+      const filteredProducts = dedupedAllProducts.filter((product: Product) => product.category === initialCategory);
       setCustomers(customersData)
-      setAllProducts(allEmployeeProducts)
-      setProducts(employeeProducts)
+      setAllProducts(dedupedAllProducts)
+      setProducts(filteredProducts)
       setSales(salesArray)
     } catch (error) {
       console.error("Failed to fetch data:", error)
@@ -179,6 +181,7 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
       category: "gas",
       items: [{ productId: "", quantity: "", price: "" }],
       receivedAmount: "",
+      paymentMethod: "cash",
       paymentStatus: "cleared",
       notes: "",
     })
@@ -299,18 +302,32 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
     }
 
     try {
+      // Transform items to match API expectations
+      const transformedItems = formData.items
+        .filter(item => item.productId && item.quantity && parseFloat(item.quantity) > 0)
+        .map(item => ({
+          product: item.productId,  // API expects 'product', not 'productId'
+          quantity: parseInt(item.quantity),
+          price: parseFloat(item.price)
+        }))
+
       const saleData = {
-        ...formData,
-        employee: user.id,
+        employeeId: user.id,  // API expects 'employeeId', not 'employee'
         customer: formData.customerId,
+        items: transformedItems,
         totalAmount: totalAmount,
+        paymentMethod: formData.paymentMethod || "cash",
+        paymentStatus: formData.paymentStatus || "cleared",
+        notes: formData.notes || "",
         receivedAmount: parseFloat(formData.receivedAmount) || 0,
       }
 
+      console.log('Sending sale data to API:', saleData)
+
       if (editingSale) {
-        await salesAPI.update(editingSale._id, saleData)
+        await employeeSalesAPI.update(editingSale._id, saleData)
       } else {
-        await salesAPI.create(saleData)
+        await employeeSalesAPI.create(saleData)
       }
 
       fetchData()
@@ -339,6 +356,7 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
       category: sale.category || 'gas',
       items: formItems,
       receivedAmount: sale.receivedAmount?.toString() || "",
+      paymentMethod: sale.paymentMethod || "cash",
       paymentStatus: sale.paymentStatus,
       notes: sale.notes || "",
     })
@@ -430,10 +448,9 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
                         value={formData.category}
                         onValueChange={(value) => {
                           setFormData({ ...formData, category: value })
-                          // Filter employee's assigned products based on selected category
+                          // Always filter from latest allProducts
                           const filteredProducts = allProducts.filter((product: Product) => product.category === value)
                           setProducts(filteredProducts)
-                          console.log(`Filtered ${value} products for employee:`, filteredProducts)
                         }}
                       >
                         <SelectTrigger>
@@ -495,25 +512,36 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
                         <div key={index} className="grid grid-cols-1 md:grid-cols-4 gap-3 p-4 border rounded-lg">
                           <div className="space-y-2">
                             <Label>Product</Label>
-                            <ProductDropdown
-                              selectedProductId={item.productId}
-                              onSelect={(productId) => {
-                                const product = products.find((p: Product) => p._id === productId)
-                                
-                                // Update both productId and price in a single atomic operation
-                                const updatedItems = [...formData.items]
-                                updatedItems[index] = {
-                                  ...updatedItems[index],
-                                  productId: productId,
-                                  price: product ? product.leastPrice.toString() : updatedItems[index].price
-                                }
-                                
-                                setFormData({ ...formData, items: updatedItems })
-                              }}
-                              categoryFilter={formData.category}
-                              placeholder={`Select ${formData.category} product`}
-                              products={products}
-                            />
+                            {products.length === 0 ? (
+                              <div className="text-sm text-red-500 py-2">No products assigned for this category. Please check your inventory.</div>
+                            ) : (
+                              <ProductDropdown
+                                selectedProductId={item.productId}
+                                onSelect={(productId) => {
+                                  const product = products.find((p: Product) => p._id === productId)
+                                  const updatedItems = [...formData.items]
+                                  // Defensive: If product is not found or productId is invalid, set price to '' and do not crash
+                                  if (!product || productId === 'no-products' || typeof product.leastPrice !== 'number') {
+                                    console.warn('Selected product not found or invalid:', productId)
+                                    updatedItems[index] = {
+                                      ...updatedItems[index],
+                                      productId: productId,
+                                      price: ''
+                                    }
+                                  } else {
+                                    updatedItems[index] = {
+                                      ...updatedItems[index],
+                                      productId: productId,
+                                      price: product.leastPrice.toString()
+                                    }
+                                  }
+                                  setFormData({ ...formData, items: updatedItems })
+                                }}
+                                categoryFilter={formData.category}
+                                placeholder={`Select ${formData.category} product`}
+                                products={products}
+                              />
+                            )}
                           </div>
 
                           <div className="space-y-2">
@@ -723,6 +751,7 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
                   <TableHead>Invoice #</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead>Total Amount</TableHead>
+                  <TableHead>Least Price (Assigned)</TableHead>
                   <TableHead>Received Amount</TableHead>
                   <TableHead>Payment</TableHead>
                   <TableHead>Status</TableHead>
@@ -745,6 +774,17 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
                       <TableCell className="font-medium">{sale.invoiceNumber}</TableCell>
                       <TableCell>{sale.customer.name}</TableCell>
                       <TableCell>AED {sale.totalAmount.toFixed(2)}</TableCell>
+                      <TableCell>
+                        {(() => {
+                          if (!sale.items || sale.items.length === 0) return <span className="text-gray-400">N/A</span>;
+                          // Find the minimum leastPrice among all items
+                          const minLeastPrice = Math.min(...sale.items.map(item => {
+                            // Try to get leastPrice from item.product.leastPrice or fallback to item.price
+                            return item.product?.leastPrice ?? item.price ?? 0;
+                          }));
+                          return minLeastPrice ? `AED ${minLeastPrice}` : <span className="text-gray-400">N/A</span>;
+                        })()}
+                      </TableCell>
                       <TableCell>AED {(sale.receivedAmount || 0).toFixed(2)}</TableCell>
                       <TableCell className="capitalize">{sale.paymentMethod}</TableCell>
                       <TableCell>{getPaymentStatusBadge(sale.paymentStatus)}</TableCell>

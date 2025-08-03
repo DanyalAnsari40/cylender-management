@@ -50,6 +50,16 @@ export const salesAPI = {
   delete: (id: string) => api.delete(`/sales/${id}`),
 }
 
+// Employee Sales API
+export const employeeSalesAPI = {
+  getAll: () => api.get("/employee-sales"),
+  getByEmployeeId: (employeeId: string) => api.get(`/employee-sales?employeeId=${employeeId}`),
+  getById: (id: string) => api.get(`/employee-sales/${id}`),
+  create: (data: any) => api.post("/employee-sales", data),
+  update: (id: string, data: any) => api.put(`/employee-sales/${id}`, data),
+  delete: (id: string) => api.delete(`/employee-sales/${id}`),
+}
+
 // Employees API
 export const employeesAPI = {
   getAll: () => api.get("/employees"),

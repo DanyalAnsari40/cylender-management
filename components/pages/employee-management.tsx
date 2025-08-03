@@ -125,7 +125,8 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
   const fetchStockAssignments = async () => {
     try {
       const response = await stockAssignmentsAPI.getAll()
-      setStockAssignments(response.data || [])
+      const stockData = Array.isArray(response.data) ? response.data : (response.data?.data || []);
+setStockAssignments(stockData)
     } catch (error) {
       console.error('Failed to fetch stock assignments:', error)
       setStockAssignments([])
@@ -303,6 +304,7 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
           quantity: stockFormData.quantity,
           assignedBy: user.id,
           notes: stockFormData.notes,
+          leastPrice: selectedProduct.leastPrice,
         }
 
         await stockAssignmentsAPI.create(assignmentData)
@@ -561,6 +563,7 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
                   <TableHead className="p-2 sm:p-4">Status</TableHead>
                   <TableHead className="p-2 sm:p-4">Product Assigned</TableHead>
                   <TableHead className="p-2 sm:p-4">Assigned Stock</TableHead>
+                  <TableHead className="p-2 sm:p-4">Least Price (Assigned)</TableHead>
                   <TableHead className="p-2 sm:p-4">Remaining Stock</TableHead>
                   <TableHead className="p-2 sm:p-4">Received Back Stock</TableHead>
                   <TableHead className="p-2 sm:p-4">Actions</TableHead>
@@ -628,6 +631,15 @@ export function EmployeeManagement({ user }: EmployeeManagementProps) {
                         )}
                       </TableCell>
                       <TableCell className="p-2 sm:p-4 text-xs sm:text-sm">{assignedStock}</TableCell>
+                      <TableCell className="p-2 sm:p-4 text-xs sm:text-sm">
+                        {(() => {
+                          const assignment = stockAssignments.find(
+                            (a) => a.employee?._id === employee._id && a.status !== 'returned'
+                          );
+                          const leastPrice = assignment?.leastPrice ?? assignment?.product?.leastPrice;
+                          return leastPrice ? `AED ${leastPrice}` : <span className="text-gray-400">N/A</span>;
+                        })()}
+                      </TableCell>
                       <TableCell className="p-2 sm:p-4 text-xs sm:text-sm">{remainingStock}</TableCell>
                       <TableCell className="p-2 sm:p-4 text-xs sm:text-sm">{receivedBackStock}</TableCell>
                       <TableCell className="p-2 sm:p-4">

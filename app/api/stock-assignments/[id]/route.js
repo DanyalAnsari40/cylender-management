@@ -18,7 +18,7 @@ export async function GET(request, { params }) {
     const { id } = params;
     const assignment = await StockAssignment.findById(id)
       .populate("employee", "name email")
-      .populate("product", "name")
+      .populate("product", "name category cylinderType")
       .populate("assignedBy", "name");
 
     if (!assignment) {
@@ -55,7 +55,7 @@ export async function PUT(request, { params }) {
 
     // Find the existing assignment with product details
     const existingAssignment = await StockAssignment.findById(id)
-      .populate("product", "name currentStock");
+      .populate("product", "name currentStock category cylinderType");
     if (!existingAssignment) {
       return NextResponse.json(
         { error: "Stock assignment not found" },
@@ -101,7 +101,7 @@ export async function PUT(request, { params }) {
       { new: true, runValidators: true }
     )
       .populate("employee", "name email")
-      .populate("product", "name")
+      .populate("product", "name category cylinderType")
       .populate("assignedBy", "name");
 
     return NextResponse.json(updatedAssignment);

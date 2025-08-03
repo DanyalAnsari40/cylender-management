@@ -14,6 +14,7 @@ interface EmployeeDashboardProps {
 }
 
 export function EmployeeDashboard({ user, setUnreadCount }: EmployeeDashboardProps) {
+  const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [assignedStock, setAssignedStock] = useState<any[]>([])
   const [notifications, setNotifications] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -40,7 +41,8 @@ export function EmployeeDashboard({ user, setUnreadCount }: EmployeeDashboardPro
       ])
 
       // Filter stock assignments for current employee
-      const employeeStock = (stockResponse.data || []).filter((stock: any) => stock.employee?._id === user.id)
+      const stockData = Array.isArray(stockResponse.data) ? stockResponse.data : (stockResponse.data?.data || []);
+const employeeStock = stockData.filter((stock: any) => stock.employee?._id === user.id)
       setAssignedStock(employeeStock)
       setNotifications(notificationsResponse.data || [])
       if (setUnreadCount) setUnreadCount((notificationsResponse.data || []).filter((n: any) => !n.isRead).length)
@@ -106,9 +108,13 @@ export function EmployeeDashboard({ user, setUnreadCount }: EmployeeDashboardPro
     }
   };
 
-  const pendingStock = assignedStock.filter((stock) => stock.status === "assigned")
-  const receivedStock = assignedStock.filter((stock) => stock.status === "received")
-  const returnedStock = assignedStock.filter((stock) => stock.status === "returned")
+  const pendingStock = assignedStock.filter((stock: any) => stock.status === "assigned")
+  const receivedStock = assignedStock.filter((stock: any) => stock.status === "received")
+  const returnedStock = assignedStock.filter((stock: any) => stock.status === "returned")
+
+  // Filtering logic for category
+  const pendingStockFiltered = categoryFilter ? pendingStock.filter((stock: any) => stock.product?.category === categoryFilter) : pendingStock;
+  const receivedStockFiltered = categoryFilter ? receivedStock.filter((stock: any) => stock.product?.category === categoryFilter) : receivedStock;
   const unreadNotifications = notifications.filter((n) => !n.isRead)
   
   // Enhanced stock calculations using the new logic
@@ -200,16 +206,23 @@ export function EmployeeDashboard({ user, setUnreadCount }: EmployeeDashboardPro
                 <TableHeader>
                   <TableRow>
                     <TableHead>Product</TableHead>
+                    <TableHead>Category</TableHead>
                     <TableHead>Quantity</TableHead>
+                    <TableHead>Least Price (Assigned)</TableHead>
                     <TableHead>Assigned Date</TableHead>
                     <TableHead>Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pendingStock.map((stock) => (
+                  {pendingStockFiltered.map((stock) => (
                     <TableRow key={stock._id}>
                       <TableCell className="font-medium">{stock.product?.name || "Unknown Product"}</TableCell>
+                      <TableCell>{stock.product?.category || "-"}</TableCell>
                       <TableCell>{stock.quantity}</TableCell>
+                      <TableCell>{(() => {
+                        const leastPrice = stock.leastPrice ?? stock.product?.leastPrice;
+                        return leastPrice ? `AED ${leastPrice}` : <span className="text-gray-400">N/A</span>;
+                      })()}</TableCell>
                       <TableCell>{new Date(stock.assignedDate).toLocaleDateString()}</TableCell>
                       <TableCell>
                         <Button
@@ -225,7 +238,7 @@ export function EmployeeDashboard({ user, setUnreadCount }: EmployeeDashboardPro
                   ))}
                   {pendingStock.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center text-gray-500 py-8">
+                      <TableCell colSpan={6} className="text-center text-gray-500 py-8">
                         No pending stock assignments.
                       </TableCell>
                     </TableRow>
@@ -249,16 +262,23 @@ export function EmployeeDashboard({ user, setUnreadCount }: EmployeeDashboardPro
                 <TableHeader>
                   <TableRow>
                     <TableHead>Product</TableHead>
+                    <TableHead>Category</TableHead>
                     <TableHead>Quantity</TableHead>
+                    <TableHead>Least Price (Assigned)</TableHead>
                     <TableHead>Received Date</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {receivedStock.map((stock) => (
+                  {receivedStockFiltered.map((stock) => (
                     <TableRow key={stock._id}>
                       <TableCell className="font-medium">{stock.product?.name || "Unknown Product"}</TableCell>
+                      <TableCell>{stock.product?.category || "-"}</TableCell>
                       <TableCell>{stock.quantity}</TableCell>
+                      <TableCell>{(() => {
+                        const leastPrice = stock.leastPrice ?? stock.product?.leastPrice;
+                        return leastPrice ? `AED ${leastPrice}` : <span className="text-gray-400">N/A</span>;
+                      })()}</TableCell>
                       <TableCell>{stock.receivedDate ? new Date(stock.receivedDate).toLocaleDateString() : "-"}</TableCell>
                       <TableCell>
                         <Button
@@ -274,7 +294,7 @@ export function EmployeeDashboard({ user, setUnreadCount }: EmployeeDashboardPro
                   ))}
                   {receivedStock.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center text-gray-500 py-8">
+                      <TableCell colSpan={6} className="text-center text-gray-500 py-8">
                         No received stock assignments.
                       </TableCell>
                     </TableRow>

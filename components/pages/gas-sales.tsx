@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Plus, Edit, Trash2, Receipt, Search, Filter } from "lucide-react"
-import { salesAPI, customersAPI, productsAPI } from "@/lib/api"
+import { salesAPI, customersAPI, productsAPI, employeeSalesAPI } from "@/lib/api"
 import { ReceiptDialog } from "@/components/receipt-dialog"
 import { SignatureDialog } from "@/components/signature-dialog"
 import { CustomerDropdown } from "@/components/ui/customer-dropdown"
@@ -44,6 +44,11 @@ interface Sale {
   receivedAmount?: number
   notes?: string
   customerSignature?: string
+  employee?: {
+    _id: string
+    name: string
+    email: string
+  }
   createdAt: string
   updatedAt: string
 }
@@ -117,15 +122,24 @@ export function GasSales() {
   const fetchData = async () => {
     try {
       setLoading(true)
-      const [salesResponse, customersResponse, productsResponse] = await Promise.all([
+      const [salesResponse, employeeSalesResponse, customersResponse, productsResponse] = await Promise.all([
         salesAPI.getAll(),
+        employeeSalesAPI.getAll(),
         customersAPI.getAll(),
         productsAPI.getAll(),
       ])
 
       // Ensure we're setting arrays - handle nested data structure for all APIs
-      const salesData = Array.isArray(salesResponse.data?.data) ? salesResponse.data.data : 
-                       Array.isArray(salesResponse.data) ? salesResponse.data : []
+      const adminSalesData = Array.isArray(salesResponse.data?.data) ? salesResponse.data.data : 
+                           Array.isArray(salesResponse.data) ? salesResponse.data : []
+
+      const employeeSalesData = Array.isArray(employeeSalesResponse.data) ? employeeSalesResponse.data : []
+
+      const combinedSales = [...adminSalesData, ...employeeSalesData].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      )
+
+      const salesData = combinedSales
       
       const customersData = Array.isArray(customersResponse.data?.data) 
         ? customersResponse.data.data 
@@ -865,6 +879,7 @@ export function GasSales() {
                   <TableHead className="p-4">Total (AED)</TableHead>
                   <TableHead className="p-4">Payment</TableHead>
                   <TableHead className="p-4">Status</TableHead>
+                  <TableHead className="p-4">Added By</TableHead>
                   <TableHead className="p-4">Date</TableHead>
                   <TableHead className="p-4">Actions</TableHead>
                 </TableRow>
@@ -909,6 +924,13 @@ export function GasSales() {
                       >
                         {sale.paymentStatus}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="p-4">
+                      {sale.employee ? (
+                        <Badge variant="default">{sale.employee.name}</Badge>
+                      ) : (
+                        <Badge variant="secondary">Admin</Badge>
+                      )}
                     </TableCell>
                     <TableCell className="p-4">{new Date(sale.createdAt).toLocaleDateString()}</TableCell>
                     <TableCell className="p-4">

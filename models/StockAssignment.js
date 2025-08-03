@@ -45,6 +45,10 @@ const StockAssignmentSchema = new mongoose.Schema(
     notes: {
       type: String,
     },
+    leastPrice: {
+      type: Number,
+      required: true,
+    },
   },
   {
     timestamps: true,

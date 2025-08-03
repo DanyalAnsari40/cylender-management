@@ -4,7 +4,7 @@ import Notification from "@/models/Notification";
 import Product from "@/models/Product";
 import { NextResponse } from "next/server";
 
-export async function GET() {
+export async function GET(request) {
   try {
     await dbConnect();
   } catch (error) {
@@ -16,12 +16,29 @@ export async function GET() {
   }
 
   try {
-    const assignments = await StockAssignment.find({})
+    // Support filtering by employeeId and status
+    const { searchParams } = new URL(request.url, `http://${request.headers.get("host") || "localhost"}`);
+    const employeeId = searchParams.get("employeeId");
+    const status = searchParams.get("status");
+    const query = {};
+    if (employeeId) query.employee = employeeId;
+    if (status) query.status = status;
+
+    let assignments = await StockAssignment.find(query)
       .populate("employee", "name email")
-      .populate("product", "name")
+      .populate("product", "name category cylinderType")
       .populate("assignedBy", "name")
       .sort({ createdAt: -1 });
-    return NextResponse.json(assignments);
+    // Inject leastPrice from assignment into product object for frontend compatibility
+    assignments = assignments.map(a => {
+      const obj = a.toObject();
+      if (obj.product) {
+        obj.product.leastPrice = obj.leastPrice;
+        obj.product.currentStock = obj.remainingQuantity;
+      }
+      return obj;
+    });
+    return NextResponse.json({ data: assignments });
   } catch (error) {
     console.error("Stock assignments GET error:", error);
     return NextResponse.json(
@@ -70,10 +87,11 @@ export async function POST(request) {
 
     console.log(`Stock deducted: Product ${product.name}, Quantity: ${data.quantity}, New Stock: ${updatedStock}`);
 
-    // Create assignment with remainingQuantity initialized to the assigned quantity
+    // Create assignment with remainingQuantity initialized to the assigned quantity and include leastPrice
     const assignmentData = {
       ...data,
-      remainingQuantity: data.quantity
+      remainingQuantity: data.quantity,
+      leastPrice: product.leastPrice
     };
     const assignment = await StockAssignment.create(assignmentData);
 
@@ -89,7 +107,7 @@ export async function POST(request) {
 
     const populatedAssignment = await StockAssignment.findById(assignment._id)
       .populate("employee", "name email")
-      .populate("product", "name")
+      .populate("product", "name category cylinderType")
       .populate("assignedBy", "name");
 
     return NextResponse.json(populatedAssignment, { status: 201 });
