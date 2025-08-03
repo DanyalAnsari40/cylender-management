@@ -34,7 +34,10 @@ interface ReceiptDialogProps {
 }
 
 export function ReceiptDialog({ sale, signature, onClose }: ReceiptDialogProps) {
-  const subtotal = sale.totalAmount;
+  // Calculate subtotal from items
+  const subtotal = sale.items.reduce((sum, item) => {
+    return sum + (item.total || (item.price * item.quantity));
+  }, 0);
   const vatAmount = subtotal * 0.05;
   const totalWithVat = subtotal + vatAmount;
   // Use signature from sale object if available, otherwise use signature prop

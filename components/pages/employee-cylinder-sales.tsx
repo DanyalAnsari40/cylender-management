@@ -76,6 +76,7 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("all")
+  const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null)
 
   // Customer search state
   const [customerSearch, setCustomerSearch] = useState("")
@@ -200,6 +201,7 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
     setCustomerSearch("")
     setShowCustomerSuggestions(false)
     setFilteredCustomers([])
+    setEditingTransactionId(null)
   }
 
   const handleCustomerSearchChange = (value: string) => {
@@ -250,6 +252,24 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
         newState.returnAmount = 0;
       }
 
+      // When product changes, auto-fill the amount with least price
+      if (name === 'product') {
+        const selectedProduct = products.find(p => p._id === value);
+        if (selectedProduct) {
+          const calculatedAmount = selectedProduct.leastPrice * newState.quantity;
+          newState.amount = calculatedAmount;
+          
+          // Set specific amount fields based on transaction type
+          if (newState.type === 'deposit') {
+            newState.depositAmount = calculatedAmount;
+          } else if (newState.type === 'refill') {
+            newState.refillAmount = calculatedAmount;
+          } else if (newState.type === 'return') {
+            newState.returnAmount = calculatedAmount;
+          }
+        }
+      }
+
       return newState;
     });
   };
@@ -261,9 +281,39 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
     setFormData((prev) => {
       const newState = { ...prev, [name]: name === 'notes' || name === 'bankName' || name === 'checkNumber' ? value : numericValue };
 
+      // When quantity changes, recalculate amounts based on selected product
+      if (name === 'quantity' && newState.product) {
+        const selectedProduct = products.find(p => p._id === newState.product);
+        if (selectedProduct) {
+          const calculatedAmount = selectedProduct.leastPrice * numericValue;
+          newState.amount = calculatedAmount;
+          
+          // Update specific amount fields based on transaction type
+          if (newState.type === 'deposit') {
+            newState.depositAmount = calculatedAmount;
+          } else if (newState.type === 'refill') {
+            newState.refillAmount = calculatedAmount;
+          } else if (newState.type === 'return') {
+            newState.returnAmount = calculatedAmount;
+          }
+        }
+      }
+
       // Sync the main 'amount' field with the specific amount field being changed
       if (['depositAmount', 'refillAmount', 'returnAmount'].includes(name)) {
         newState.amount = numericValue;
+      }
+
+      // Auto-update status based on deposit amount comparison (only for deposit transactions)
+      if (newState.type === 'deposit' && (name === 'depositAmount' || name === 'amount')) {
+        const depositAmt = name === 'depositAmount' ? numericValue : newState.depositAmount;
+        const totalAmt = name === 'amount' ? numericValue : newState.amount;
+        
+        if (depositAmt >= totalAmt && totalAmt > 0) {
+          newState.status = 'cleared';
+        } else if (depositAmt < totalAmt && depositAmt > 0) {
+          newState.status = 'pending';
+        }
       }
 
       return newState;
@@ -319,8 +369,12 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
         notes: formData.notes
       }
 
-      const response = await fetch("/api/employee-cylinders", {
-        method: "POST",
+      const isEditing = editingTransactionId !== null
+      const url = isEditing ? `/api/employee-cylinders/${editingTransactionId}` : "/api/employee-cylinders"
+      const method = isEditing ? "PUT" : "POST"
+
+      const response = await fetch(url, {
+        method: method,
         headers: {
           "Content-Type": "application/json",
         },
@@ -328,17 +382,20 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
       })
 
       if (response.ok) {
-        toast.success(`${formData.type.charAt(0).toUpperCase() + formData.type.slice(1)} transaction created successfully!`)
+        const actionText = isEditing ? "updated" : "created"
+        toast.success(`${formData.type.charAt(0).toUpperCase() + formData.type.slice(1)} transaction ${actionText} successfully!`)
         resetForm()
         setIsDialogOpen(false)
         fetchData()
       } else {
         const errorData = await response.json()
-        toast.error(errorData.error || "Failed to create transaction")
+        const actionText = isEditing ? "update" : "create"
+        toast.error(errorData.error || `Failed to ${actionText} transaction`)
       }
     } catch (error) {
-      console.error("Error creating transaction:", error)
-      toast.error("Failed to create transaction")
+      const actionText = editingTransactionId ? "updating" : "creating"
+      console.error(`Error ${actionText} transaction:`, error)
+      toast.error(`Failed to ${actionText.replace('ing', '')} transaction`)
     }
   }
 
@@ -363,6 +420,7 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
       securityAmount: transaction.securityAmount || 0
     })
     setCustomerSearch(transaction.customer?.name || '')
+    setEditingTransactionId(transaction._id)
     setIsDialogOpen(true)
   }
 
@@ -407,6 +465,11 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
       "bg-blue-100 text-blue-800" : 
       "bg-purple-100 text-purple-800"
   }
+
+  // Get selected product details
+  const getSelectedProduct = () => {
+    return products.find(p => p._id === formData.product) || null;
+  };
 
   // Filter transactions based on active tab
   const getFilteredTransactions = () => {
@@ -614,21 +677,77 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
     )
   }
   return (
-  <div className="container mx-auto p-4 sm:p-6 lg:p-8">
-    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8">
-      <div className="mb-4 sm:mb-0">
-        <h1 className="text-3xl font-bold text-[#2B3068]">Employee Cylinder Sales</h1>
-        <p className="text-gray-500 mt-1">Manage your cylinder sales and transactions.</p>
+    <div className="pt-16 lg:pt-0 space-y-8">
+      <div className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] rounded-2xl p-8 text-white">
+        <h1 className="text-4xl font-bold mb-2">Employee Cylinder Sales</h1>
+        <p className="text-white/80 text-lg">Manage your cylinder sales and transactions</p>
       </div>
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogTrigger asChild>
-          <Button className="bg-[#2B3068] text-white hover:bg-blue-800" onClick={() => resetForm()}>
-            <Plus className="mr-2 h-4 w-4" /> Create New Transaction
-          </Button>
-        </DialogTrigger>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-0 shadow-lg">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-700">Total Transactions</CardTitle>
+            <FileText className="w-5 h-5 text-[#2B3068]" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-[#2B3068]">{transactions.length}</div>
+            <p className="text-xs text-gray-600 mt-1">All transactions</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-0 shadow-lg">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-700">Total Revenue</CardTitle>
+            <DollarSign className="w-5 h-5 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-green-600">
+              AED {transactions.reduce((sum, t) => sum + (t.refillAmount || 0), 0).toFixed(2)}
+            </div>
+            <p className="text-xs text-gray-600 mt-1">Revenue generated</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-yellow-50 to-yellow-100 border-0 shadow-lg">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-700">Pending</CardTitle>
+            <Package className="w-5 h-5 text-yellow-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-yellow-600">
+              {transactions.filter(t => t.status === "pending").length}
+            </div>
+            <p className="text-xs text-gray-600 mt-1">Pending transactions</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-0 shadow-lg">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-700">Cleared</CardTitle>
+            <Package className="w-5 h-5 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-green-600">
+              {transactions.filter(t => t.status === "cleared").length}
+            </div>
+            <p className="text-xs text-gray-600 mt-1">Cleared transactions</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+        <div className="flex flex-col sm:flex-row gap-4 flex-1">
+          {/* Search can be added here later if needed */}
+        </div>
+        
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button onClick={() => resetForm()} className="bg-[#2B3068] hover:bg-[#1a1f4a] text-white w-full sm:w-auto">
+              <Plus className="w-4 h-4 mr-2" />
+              New Transaction
+            </Button>
+          </DialogTrigger>
         <DialogContent className="sm:max-w-[600px] bg-white shadow-2xl rounded-lg">
           <DialogHeader>
-            <DialogTitle>Create New Cylinder Transaction</DialogTitle>
+            <DialogTitle>{editingTransactionId ? "Edit Cylinder Transaction" : "Create New Cylinder Transaction"}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-6 py-4">
   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -685,11 +804,16 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
         <SelectContent>
           {products.map((product) => (
             <SelectItem key={product._id} value={product._id}>
-              {product.name}
+              {product.name} - AED {product.leastPrice.toFixed(2)}
             </SelectItem>
           ))}
         </SelectContent>
       </Select>
+      {getSelectedProduct() && (
+        <p className="text-sm text-gray-500 mt-1">
+          Price: AED {getSelectedProduct()!.leastPrice.toFixed(2)} per unit
+        </p>
+      )}
     </div>
 
     {/* Cylinder Size */}
@@ -770,25 +894,29 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
       </>
     )}
 
-    {/* Deposit Amount */}
-    <div>
-      <Label htmlFor="depositAmount">Deposit Amount</Label>
-      <Input id="depositAmount" name="depositAmount" type="number" value={formData.depositAmount} onChange={handleChange} />
-    </div>
+    {/* Deposit Amount - Only show if not refill */}
+    {formData.type !== 'refill' && (
+      <div>
+        <Label htmlFor="depositAmount">Deposit Amount</Label>
+        <Input id="depositAmount" name="depositAmount" type="number" value={formData.depositAmount} onChange={handleChange} />
+      </div>
+    )}
 
-    {/* Status */}
-    <div>
-      <Label htmlFor="status">Status</Label>
-      <Select value={formData.status} onValueChange={(value) => handleSelectChange("status", value)}>
-        <SelectTrigger>
-          <SelectValue placeholder="Select status" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="pending">Pending</SelectItem>
-          <SelectItem value="cleared">Cleared</SelectItem>
-        </SelectContent>
-      </Select>
-    </div>
+    {/* Status - Only show if not refill */}
+    {formData.type !== 'refill' && (
+      <div>
+        <Label htmlFor="status">Status</Label>
+        <Select value={formData.status} onValueChange={(value) => handleSelectChange("status", value)}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="cleared">Cleared</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    )}
   </div>
 
   {/* Notes */}
@@ -799,7 +927,7 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
 
   <div className="flex justify-end pt-4">
     <Button type="submit" className="bg-[#2B3068] text-white hover:bg-blue-800">
-      Create Transaction
+      {editingTransactionId ? "Update Transaction" : "Create Transaction"}
     </Button>
   </div>
 </form>
@@ -808,79 +936,25 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
       </Dialog>
     </div>
 
-    {/* Summary Cards */}
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-      <Card className="border-0 shadow-lg">
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Total Transactions</p>
-              <p className="text-2xl font-bold text-[#2B3068]">{transactions.length}</p>
-            </div>
-            <FileText className="w-8 h-8 text-[#2B3068]" />
-          </div>
-        </CardContent>
-      </Card>
-      <Card className="border-0 shadow-lg">
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-              <p className="text-2xl font-bold text-green-600">
-                AED {transactions.reduce((sum, t) => sum + (t.refillAmount || 0), 0).toFixed(2)}
-              </p>
-            </div>
-            <DollarSign className="w-8 h-8 text-green-600" />
-          </div>
-        </CardContent>
-      </Card>
-      <Card className="border-0 shadow-lg">
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Pending</p>
-              <p className="text-2xl font-bold text-yellow-600">
-                {transactions.filter(t => t.status === "pending").length}
-              </p>
-            </div>
-            <Package className="w-8 h-8 text-yellow-600" />
-          </div>
-        </CardContent>
-      </Card>
-      <Card className="border-0 shadow-lg">
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Cleared</p>
-              <p className="text-2xl font-bold text-green-600">
-                {transactions.filter(t => t.status === "cleared").length}
-              </p>
-            </div>
-            <Package className="w-8 h-8 text-green-600" />
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-
     {/* Transactions Table */}
     <Card className="border-0 shadow-lg">
-      <CardHeader className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] text-white rounded-t-lg p-4">
+      <CardHeader className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] text-white rounded-t-lg">
         <CardTitle>Cylinder Transactions</CardTitle>
       </CardHeader>
       <CardContent className="p-0">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <div className="p-4 border-b">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="all">All</TabsTrigger>
-              <TabsTrigger value="deposit">Deposit</TabsTrigger>
-              <TabsTrigger value="refill">Refill</TabsTrigger>
-              <TabsTrigger value="return">Return</TabsTrigger>
+          <div className="border-b border-gray-200 px-6">
+            <TabsList className="bg-transparent p-0 -mb-px">
+              <TabsTrigger value="all" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-[#2B3068] rounded-none text-base font-semibold px-4 py-3">All</TabsTrigger>
+              <TabsTrigger value="deposit" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-blue-600 rounded-none text-base font-semibold px-4 py-3">Deposits</TabsTrigger>
+              <TabsTrigger value="refill" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-green-600 rounded-none text-base font-semibold px-4 py-3">Refills</TabsTrigger>
+              <TabsTrigger value="return" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-orange-600 rounded-none text-base font-semibold px-4 py-3">Returns</TabsTrigger>
             </TabsList>
           </div>
-          <TabsContent value={activeTab} className="m-0">
+          <TabsContent value={activeTab} className="p-0">
             <div className="overflow-x-auto">
               <Table>
-                <TableHeader>
+                <TableHeader className="bg-gray-50">
                   {renderTableHeaders()}
                 </TableHeader>
                 <TableBody>
@@ -888,18 +962,18 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
                     getFilteredTransactions().map((transaction) => renderTableCells(transaction))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={getVisibleColumns().length} className="text-center text-gray-500 py-8">
+                      <TableCell colSpan={getVisibleColumns().length} className="h-24 text-center text-lg text-gray-500">
                         No {activeTab === "all" ? "" : activeTab} transactions found.
                       </TableCell>
                     </TableRow>
                   )}
                 </TableBody>
-                </Table>
-              </div>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+              </Table>
+            </div>
+          </TabsContent>
+        </Tabs>
+      </CardContent>
+    </Card>
     </div>
   )
 }

@@ -167,11 +167,26 @@ export function CylinderManagement() {
       customer: () => (
         <TableCell className="p-4">
           <div>
-            <div className="font-medium">{transaction.customer?.name || "Unknown Customer"}</div>
+            <div className="flex items-center gap-2">
+              <div className="font-medium">{transaction.customer?.name || "Unknown Customer"}</div>
+              {transaction.isEmployeeTransaction ? (
+                <div className="flex items-center gap-1">
+                  <div className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-semibold" title={`Created by Employee: ${transaction.employee?.name || 'Unknown Employee'}`}>
+                    E
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1">
+                  <div className="w-6 h-6 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center text-xs font-semibold" title="Created by Admin">
+                    A
+                  </div>
+                </div>
+              )}
+            </div>
             <div className="text-sm text-gray-500">{transaction.customer?.phone}</div>
             {transaction.isEmployeeTransaction && (
               <div className="text-xs text-blue-600 font-medium mt-1">
-                👤 Employee: {transaction.employee?.name || "Unknown Employee"}
+                Employee: {transaction.employee?.name || "Unknown Employee"}
               </div>
             )}
           </div>
@@ -295,13 +310,13 @@ export function CylinderManagement() {
     )
   }
 
-  // Form state
+  // Form state with proper defaults
   const [formData, setFormData] = useState({
     type: "deposit" as "deposit" | "refill" | "return",
     customerId: "",
     productId: "",
     productName: "",
-    cylinderSize: "",
+    cylinderSize: "small" as string, // Default to small instead of empty string
     quantity: 1,
     amount: 0,
     depositAmount: 0,
@@ -407,10 +422,33 @@ export function CylinderManagement() {
     e.preventDefault()
     try {
       
+      // Validate required fields
       if (!formData.customerId || formData.customerId === '') {
         alert("Please select a customer")
         return
       }
+      
+      if (!formData.productId || formData.productId === '') {
+        alert("Please select a product")
+        return
+      }
+      
+      if (!formData.cylinderSize || formData.cylinderSize === '') {
+        alert("Please select a cylinder size")
+        return
+      }
+      
+      if (!formData.quantity || formData.quantity <= 0) {
+        alert("Please enter a valid quantity")
+        return
+      }
+      
+      if (formData.type !== 'refill' && (!formData.amount || formData.amount <= 0)) {
+        alert("Please enter a valid amount")
+        return
+      }
+
+      console.log("Form validation passed, creating transaction data:", formData);
 
       const transactionData = {
         type: formData.type,
@@ -525,7 +563,11 @@ export function CylinderManagement() {
   }
 
   const handleReceiptClick = (transaction: CylinderTransaction) => {
-    if (transaction.type === "return") return;
+    // Don't generate receipt for cylinder return transactions
+    if (transaction.type === "return") {
+      console.log(`Receipt not available for return transactions`);
+      return;
+    }
 
     if (!customerSignature) {
       // No signature yet - show signature dialog first
@@ -975,11 +1017,16 @@ export function CylinderManagement() {
                   <SelectContent>
                     {products.map((product) => (
                       <SelectItem key={product._id} value={product._id}>
-                        {product.name} ({product.cylinderType})
+                        {product.name} ({product.cylinderType}) - AED {product.leastPrice.toFixed(2)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {formData.productId && (
+                  <p className="text-sm text-gray-500 mt-1">
+                    Price: AED {products.find(p => p._id === formData.productId)?.leastPrice.toFixed(2)} per unit
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

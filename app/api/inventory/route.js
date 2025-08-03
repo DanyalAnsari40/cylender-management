@@ -1,5 +1,7 @@
 import dbConnect from "@/lib/mongodb";
 import PurchaseOrder from "@/models/PurchaseOrder";
+import Product from "@/models/Product";
+import StockManager from "@/lib/stock-manager";
 import { NextResponse } from "next/server";
 
 export async function GET() {
@@ -85,6 +87,12 @@ export async function PATCH(request) {
     if (status) {
       updateData.inventoryStatus = status;
       console.log("Updating inventory status to:", status);
+      
+      // If inventory status is being set to "received", also update the main purchase order status
+      if (status === "received") {
+        updateData.status = "completed";
+        console.log("Also updating purchase order status to: completed");
+      }
     }
     
     if (quantity !== undefined) {
@@ -155,6 +163,11 @@ export async function PATCH(request) {
       updatedAt: updatedOrder.updatedAt
     };
 
+    // Use centralized StockManager to synchronize product stock after any update
+    if (updatedOrder.product) {
+      await StockManager.syncProductStock(updatedOrder.product);
+    }
+
     return NextResponse.json({
       success: true,
       data: inventoryItem,
@@ -173,3 +186,4 @@ export async function PATCH(request) {
     );
   }
 }
+

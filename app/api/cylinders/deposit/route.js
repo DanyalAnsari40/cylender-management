@@ -17,6 +17,7 @@ export async function POST(request) {
 
   try {
     const data = await request.json();
+    console.log("Received deposit data:", JSON.stringify(data, null, 2));
     
     // Validate customer exists
     const customer = await Customer.findById(data.customer);
@@ -39,12 +40,20 @@ export async function POST(request) {
       .populate("customer", "name phone address email")
       .populate("product", "name category cylinderType");
 
-    // Update product stock
+    // Update product stock if product exists
     if (data.product && data.quantity) {
-      const product = await Product.findById(data.product);
-      if (product) {
-        product.currentStock -= Number(data.quantity);
-        await product.save();
+      try {
+        const product = await Product.findById(data.product);
+        if (product) {
+          product.currentStock -= Number(data.quantity);
+          await product.save();
+          console.log(`Updated product ${product.name} stock: ${product.currentStock}`);
+        } else {
+          console.log(`Product with ID ${data.product} not found for stock update`);
+        }
+      } catch (stockError) {
+        console.error("Error updating product stock:", stockError);
+        // Don't fail the transaction creation if stock update fails
       }
     }
 
