@@ -42,10 +42,11 @@ export async function GET() {
     const cylinderDeposits = cylinderTransactions.filter(t => t.type === 'deposit').length;
     const cylinderReturns = cylinderTransactions.filter(t => t.type === 'return').length;
 
-    // Calculate cylinder revenue
-    const cylinderRevenue = cylinderTransactions.reduce((sum, transaction) => 
-      sum + (transaction.amount || 0), 0
-    );
+    // Calculate cylinder revenue (only from deposits)
+    const cylinderRevenue = cylinderTransactions
+      .filter(t => t.type === 'deposit')
+      .reduce((sum, transaction) => sum + (transaction.amount || 0), 0);
+
 
     // Get recent activity (last 30 days)
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -82,7 +83,9 @@ export async function GET() {
       });
 
       const monthRevenue = monthSales.reduce((sum, sale) => sum + (sale.totalAmount || 0), 0);
-      const monthCylinderRevenue = monthCylinderTransactions.reduce((sum, transaction) => 
+      const monthCylinderRevenue = monthCylinderTransactions
+        .filter(t => t.type === 'deposit')
+        .reduce((sum, transaction) => 
         sum + (transaction.amount || 0), 0
       );
 
@@ -118,8 +121,41 @@ export async function GET() {
         $addFields: {
           totalTransactions: { $add: [{ $size: '$sales' }, { $size: '$cylinderTransactions' }] },
           totalSalesAmount: { $sum: '$sales.totalAmount' },
-          totalCylinderAmount: { $sum: '$cylinderTransactions.amount' },
-          totalAmount: { $add: [{ $sum: '$sales.totalAmount' }, { $sum: '$cylinderTransactions.amount' }] }
+          totalCylinderAmount: { 
+            $sum: { 
+              $map: { 
+                input: { 
+                  $filter: { 
+                    input: '$cylinderTransactions', 
+                    as: 'txn', 
+                    cond: { $eq: ['$$txn.type', 'deposit'] } 
+                  } 
+                }, 
+                as: 'filteredTxn', 
+                in: '$$filteredTxn.amount' 
+              } 
+            } 
+          },
+          totalAmount: { 
+            $add: [
+              { $sum: '$sales.totalAmount' }, 
+              { 
+                $sum: { 
+                  $map: { 
+                    input: { 
+                      $filter: { 
+                        input: '$cylinderTransactions', 
+                        as: 'txn', 
+                        cond: { $eq: ['$$txn.type', 'deposit'] } 
+                      } 
+                    }, 
+                    as: 'filteredTxn', 
+                    in: '$$filteredTxn.amount' 
+                  } 
+                } 
+              }
+            ] 
+          }
         }
       },
       {

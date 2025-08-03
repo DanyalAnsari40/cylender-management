@@ -34,6 +34,9 @@ interface ReceiptDialogProps {
 }
 
 export function ReceiptDialog({ sale, signature, onClose }: ReceiptDialogProps) {
+  const subtotal = sale.totalAmount;
+  const vatAmount = subtotal * 0.05;
+  const totalWithVat = subtotal + vatAmount;
   // Use signature from sale object if available, otherwise use signature prop
   const signatureToUse = sale.customerSignature || signature
   
@@ -238,12 +241,25 @@ export function ReceiptDialog({ sale, signature, onClose }: ReceiptDialogProps) 
             </tbody>
           </table>
           
-          <div class="total-section">
-            <div class="total-amount">TOTAL: AED ${sale.totalAmount.toFixed(2)}</div>
-            <div style="margin-top: 15px; font-size: 16px;">
+          <table class="items-table" style="margin-top: 20px;">
+            <tbody>
+              <tr>
+                <td style="text-align: right;">Subtotal</td>
+                <td style="text-align: right; width: 120px;">AED ${subtotal.toFixed(2)}</td>
+              </tr>
+              <tr>
+                <td style="text-align: right;">VAT (5%)</td>
+                <td style="text-align: right; width: 120px;">AED ${vatAmount.toFixed(2)}</td>
+              </tr>
+              <tr>
+                <td style="text-align: right; font-weight: bold; font-size: 18px;">Total</td>
+                <td style="text-align: right; font-weight: bold; font-size: 18px; width: 120px;">AED ${totalWithVat.toFixed(2)}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div style="margin-top: 15px; font-size: 14px; text-align: right;">
               <div><strong>Payment Method:</strong> ${sale.paymentMethod.toUpperCase()}</div>
               <div><strong>Status:</strong> ${sale.paymentStatus.toUpperCase()}</div>
-            </div>
           </div>
           
           <div class="footer" style="position: relative; text-align: center; margin-top: 40px;">
@@ -364,14 +380,28 @@ export function ReceiptDialog({ sale, signature, onClose }: ReceiptDialogProps) 
           <Separator />
 
           {/* Total */}
-          <div className="bg-[#2B3068] text-white p-4 rounded-lg">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-xl font-bold">TOTAL:</span>
-              <span className="text-2xl font-bold">AED {sale.totalAmount.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span>Payment Method: {sale.paymentMethod.toUpperCase()}</span>
-              <span>Status: {sale.paymentStatus.toUpperCase()}</span>
+          <div className="mt-4">
+            <table className="w-full">
+              <tbody>
+                <tr>
+                  <td className="text-right pr-4">Subtotal</td>
+                  <td className="text-right font-semibold w-32">AED {subtotal.toFixed(2)}</td>
+                </tr>
+                <tr>
+                  <td className="text-right pr-4">VAT (5%)</td>
+                  <td className="text-right font-semibold w-32">AED {vatAmount.toFixed(2)}</td>
+                </tr>
+                <tr>
+                  <td className="text-right pr-4 font-bold text-xl">Total</td>
+                  <td className="text-right font-bold text-xl w-32">AED {totalWithVat.toFixed(2)}</td>
+                </tr>
+              </tbody>
+            </table>
+            <div className="flex justify-end text-sm mt-4">
+              <div className="text-right">
+                <div>Payment Method: {sale.paymentMethod.toUpperCase()}</div>
+                <div>Status: {sale.paymentStatus.toUpperCase()}</div>
+              </div>
             </div>
           </div>
 

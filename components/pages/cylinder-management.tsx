@@ -512,7 +512,7 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
           price: transaction.amount,
           total: transaction.amount * transaction.quantity
         }],
-        totalAmount: transaction.amount,
+        totalAmount: transaction.amount * transaction.quantity,
         paymentMethod: "cash",
         paymentStatus: "paid",
         createdAt: transaction.createdAt,
@@ -551,7 +551,7 @@ const handleReceiptClick = (transaction: CylinderTransaction) => {
           price: pendingTransaction.amount,
           total: pendingTransaction.amount * pendingTransaction.quantity
         }],
-        totalAmount: pendingTransaction.amount,
+        totalAmount: pendingTransaction.amount * pendingTransaction.quantity,
         paymentMethod: "cash",
         paymentStatus: "paid",
         createdAt: pendingTransaction.createdAt,
