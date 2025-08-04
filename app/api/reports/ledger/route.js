@@ -2,6 +2,8 @@ import dbConnect from "@/lib/mongodb";
 import Customer from "@/models/Customer";
 import Sale from "@/models/Sale";
 import CylinderTransaction from "@/models/Cylinder";
+import EmployeeSale from "@/models/EmployeeSale";
+import EmployeeCylinderTransaction from "@/models/EmployeeCylinderTransaction";
 import { NextResponse } from "next/server";
 
 export async function GET(request) {
@@ -35,30 +37,54 @@ export async function GET(request) {
       customers.map(async (customer) => {
         try {
           // Get sales data for this customer
-          let salesQuery = { customer: customer._id };
+          let salesQuery = {
+            customer: customer._id,
+            $or: [
+              { employee: { $exists: true } },
+              { employee: { $exists: false } }
+            ]
+          };
           if (startDate || endDate) {
             salesQuery.createdAt = {};
             if (startDate) salesQuery.createdAt.$gte = new Date(startDate);
             if (endDate) salesQuery.createdAt.$lte = new Date(endDate + 'T23:59:59.999Z');
           }
 
-          const sales = await Sale.find(salesQuery)
+          const adminSales = await Sale.find(salesQuery)
             .populate('items.product', 'name category')
             .lean();
 
+          const employeeSales = await EmployeeSale.find(salesQuery)
+            .populate('items.product', 'name category')
+            .populate('employee', 'name')
+            .lean();
+
+          const sales = [...adminSales, ...employeeSales].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
           // Get cylinder transactions for this customer
-          let cylinderQuery = { customer: customer._id };
+          let cylinderQuery = {
+            customer: customer._id,
+            $or: [
+              { employee: { $exists: true } },
+              { employee: { $exists: false } }
+            ]
+          };
           if (startDate || endDate) {
             cylinderQuery.createdAt = {};
             if (startDate) cylinderQuery.createdAt.$gte = new Date(startDate);
             if (endDate) cylinderQuery.createdAt.$lte = new Date(endDate + 'T23:59:59.999Z');
           }
 
-          const cylinderTransactions = await CylinderTransaction.find(cylinderQuery).lean();
+          const adminCylinderTransactions = await CylinderTransaction.find(cylinderQuery).lean();
+          const employeeCylinderTransactions = await EmployeeCylinderTransaction.find(cylinderQuery)
+            .populate('employee', 'name')
+            .lean();
+
+          const cylinderTransactions = [...adminCylinderTransactions, ...employeeCylinderTransactions].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
           // Calculate totals
           const totalSalesAmount = sales.reduce((sum, sale) => sum + (sale.totalAmount || 0), 0);
-          const totalPaidAmount = sales.reduce((sum, sale) => sum + (sale.amountPaid || 0), 0);
+          const totalPaidAmount = sales.reduce((sum, sale) => sum + (sale.receivedAmount || 0), 0);
           const totalCylinderAmount = cylinderTransactions.reduce((sum, transaction) => sum + (transaction.amount || 0), 0);
 
           // Calculate transaction counts
@@ -134,11 +160,12 @@ export async function GET(request) {
               .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0]?.createdAt || null,
             
             // Detailed transactions for drill-down
-            recentSales: sales.slice(0, 5).map(sale => ({
+            recentSales: sales.map(sale => ({
               _id: sale._id,
               invoiceNumber: sale.invoiceNumber,
               totalAmount: sale.totalAmount,
-              amountPaid: sale.amountPaid,
+              amountPaid: sale.receivedAmount,
+              paymentStatus: sale.paymentStatus, // Use the transaction's own status
               createdAt: sale.createdAt,
               items: sale.items
             })),

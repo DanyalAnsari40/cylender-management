@@ -16,7 +16,7 @@ interface Product {
   _id: string
   name: string
   category: "gas" | "cylinder"
-  cylinderType?: "large" | "small"
+  cylinderSize?: "large" | "small"
   costPrice: number
   leastPrice: number
   currentStock: number
@@ -31,7 +31,7 @@ export function ProductManagement() {
   const [formData, setFormData] = useState({
     name: "",
     category: "gas" as "gas" | "cylinder",
-    cylinderType: "large" as "large" | "small",
+    cylinderSize: "large" as "large" | "small",
     costPrice: "",
     leastPrice: "",
   })
@@ -59,7 +59,7 @@ export function ProductManagement() {
       const productData = {
         name: formData.name,
         category: formData.category,
-        cylinderType: formData.category === "cylinder" ? formData.cylinderType : undefined,
+        cylinderSize: formData.category === "cylinder" ? formData.cylinderSize : undefined,
         costPrice: Number.parseFloat(formData.costPrice),
         leastPrice: Number.parseFloat(formData.leastPrice),
         // Only set currentStock to 0 for new products, not when updating existing ones
@@ -86,7 +86,7 @@ export function ProductManagement() {
     setFormData({
       name: "",
       category: "gas",
-      cylinderType: "large",
+      cylinderSize: "large",
       costPrice: "",
       leastPrice: "",
     })
@@ -98,7 +98,7 @@ export function ProductManagement() {
     setFormData({
       name: product.name,
       category: product.category,
-      cylinderType: product.cylinderType || "large",
+      cylinderSize: product.cylinderSize || "large",
       costPrice: product.costPrice.toString(),
       leastPrice: product.leastPrice.toString(),
     })
@@ -183,10 +183,10 @@ export function ProductManagement() {
 
                   {formData.category === "cylinder" && (
                     <div className="space-y-2">
-                      <Label htmlFor="cylinderType" className="text-sm font-medium">Cylinder Type</Label>
+                      <Label htmlFor="cylinderSize" className="text-sm font-medium">Cylinder Size</Label>
                       <Select
-                        value={formData.cylinderType}
-                        onValueChange={(value: "large" | "small") => setFormData({ ...formData, cylinderType: value })}
+                        value={formData.cylinderSize}
+                        onValueChange={(value: "large" | "small") => setFormData({ ...formData, cylinderSize: value })}
                       >
                         <SelectTrigger className="h-11 sm:h-12">
                           <SelectValue />
@@ -284,7 +284,7 @@ export function ProductManagement() {
                   <TableRow key={product._id} className="hover:bg-gray-50 transition-colors border-b border-gray-100">
                     <TableCell className="font-semibold text-[#2B3068] p-4">{product.name}</TableCell>
                     <TableCell className="capitalize p-4">{product.category}</TableCell>
-                    <TableCell className="p-4">{product.category === "cylinder" ? product.cylinderType : "-"}</TableCell>
+                    <TableCell className="p-4">{product.category === "cylinder" ? product.cylinderSize : "-"}</TableCell>
                     <TableCell className="p-4">AED {product.costPrice.toFixed(2)}</TableCell>
                     <TableCell className="p-4">AED {product.leastPrice.toFixed(2)}</TableCell>
                     <TableCell className="p-4">
@@ -342,7 +342,7 @@ export function ProductManagement() {
                       <div className="flex justify-between items-start">
                         <div className="flex-1 min-w-0">
                           <h3 className="font-semibold text-[#2B3068] text-base sm:text-lg truncate">{product.name}</h3>
-                          <p className="text-sm text-gray-600 capitalize">{product.category} {product.category === "cylinder" ? `(${product.cylinderType})` : ""}</p>
+                          <p className="text-sm text-gray-600 capitalize">{product.category} {product.category === "cylinder" ? `(${product.cylinderSize})` : ""}</p>
                         </div>
                         <span
                           className={`px-2 py-1 rounded text-xs flex-shrink-0 ml-2 ${

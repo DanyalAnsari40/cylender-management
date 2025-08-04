@@ -112,7 +112,8 @@ export default async function handler(req, res) {
         adminCylinderCount: adminCylinders.length,
         employeeCylinderCount: employeeCylinders.length,
         expenseCount: expenses.length
-      }
+      },
+      allCylinderTransactions: [...adminCylinders, ...employeeCylinders].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     }
 
     res.status(200).json({ 

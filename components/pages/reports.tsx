@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { DollarSign, Users, Fuel, Cylinder, UserCheck, ChevronDown, ChevronRight, Eye, Activity, Loader2, Receipt, FileText } from "lucide-react"
-import { reportsAPI } from "@/lib/api"
+import { reportsAPI } from "@/lib/api";
 import { SignatureDialog } from "@/components/signature-dialog"
 import { ReceiptDialog } from "@/components/receipt-dialog"
 
@@ -63,6 +63,7 @@ export function Reports() {
   const [customers, setCustomers] = useState<CustomerLedgerData[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set())
+
   
   // Autocomplete functionality state
   const [showSuggestions, setShowSuggestions] = useState(false)
@@ -202,15 +203,14 @@ export function Reports() {
 
   const fetchReportsData = async () => {
     try {
-      setLoading(true)
-      const [statsResponse] = await Promise.all([
-        reportsAPI.getStats()
-      ])
+      setLoading(true);
+      const [statsResponse, ledgerResponse] = await Promise.all([
+        reportsAPI.getStats(),
+        reportsAPI.getLedger()
+      ]);
 
-      console.log('Reports stats response:', statsResponse.data)
-
-      if (statsResponse.data.success) {
-        const statsData = statsResponse.data.data
+      if (statsResponse.data?.success) {
+        const statsData = statsResponse.data.data;
         setStats({
           totalRevenue: Number(statsData.totalRevenue) || 0,
           totalEmployees: Number(statsData.totalEmployees) || 0,
@@ -221,57 +221,33 @@ export function Reports() {
           pendingCustomers: Number(statsData.pendingCustomers) || 0,
           overdueCustomers: Number(statsData.overdueCustomers) || 0,
           clearedCustomers: Number(statsData.clearedCustomers) || 0
-        })
+        });
       }
 
-      // Fetch initial ledger data
-      await fetchLedgerData()
-    } catch (error) {
-      console.error("Failed to fetch report data:", error)
-      console.error("Error details:", error.response?.data || error.message)
-      // Set default zero values on error
-      setStats({
-        totalRevenue: 0,
-        totalEmployees: 0,
-        gasSales: 0,
-        cylinderRefills: 0,
-        totalCustomers: 0,
-        totalCombinedRevenue: 0,
-        pendingCustomers: 0,
-        overdueCustomers: 0,
-        clearedCustomers: 0
-      })
-      setLoading(false)
-    }
-  }
-
-  const fetchLedgerData = async () => {
-    try {
-      const params = new URLSearchParams()
-      if (filters.customerName) params.append('customerName', filters.customerName)
-      if (filters.status !== 'all') params.append('status', filters.status)
-      if (filters.startDate) params.append('startDate', filters.startDate)
-      if (filters.endDate) params.append('endDate', filters.endDate)
-
-      const response = await fetch(`/api/reports/ledger?${params.toString()}`)
-      const data = await response.json()
-
-      if (data.success) {
-        setCustomers(data.data)
+      if (ledgerResponse.data?.success && Array.isArray(ledgerResponse.data.data)) {
+        setCustomers(ledgerResponse.data.data);
       } else {
-        console.error('Ledger API error:', data.error)
+        console.error("Failed to fetch ledger data:", ledgerResponse.data?.error || "Unexpected response format");
+        setCustomers([]);
       }
+
     } catch (error) {
-      console.error("Failed to fetch ledger data:", error)
+      console.error("Failed to fetch report data:", error);
+      setStats({
+        totalRevenue: 0, totalEmployees: 0, gasSales: 0, cylinderRefills: 0,
+        totalCustomers: 0, totalCombinedRevenue: 0, pendingCustomers: 0, 
+        overdueCustomers: 0, clearedCustomers: 0
+      });
+      setCustomers([]);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleFilter = async () => {
-    setLoading(true)
-    await fetchLedgerData()
-  }
+    setLoading(true);
+    await fetchReportsData();
+  };
 
   // Autocomplete functionality
   const handleCustomerNameChange = (value: string) => {
@@ -321,7 +297,11 @@ export function Reports() {
     setExpandedCustomers(newExpanded)
   }
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status?: string) => {
+    if (!status) {
+      return <Badge variant="destructive" className="bg-gray-500 hover:bg-gray-600 text-white">Error</Badge>
+    }
+
     const statusConfig = {
       pending: { variant: 'secondary' as const, className: 'bg-yellow-500 hover:bg-yellow-600 text-white', label: 'Pending' },
       cleared: { variant: 'default' as const, className: 'bg-green-500 hover:bg-green-600 text-white', label: 'Cleared' },
@@ -329,7 +309,7 @@ export function Reports() {
       error: { variant: 'destructive' as const, className: 'bg-gray-500 hover:bg-gray-600 text-white', label: 'Error' }
     }
     
-    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.error
+    const config = statusConfig[status.toLowerCase() as keyof typeof statusConfig] || statusConfig.error
     
     return (
       <Badge variant={config.variant} className={config.className}>
@@ -358,7 +338,7 @@ export function Reports() {
       endDate: "",
     })
     // Trigger refetch with cleared filters
-    setTimeout(() => fetchLedgerData(), 100)
+    setTimeout(() => fetchReportsData(), 100)
   }
 
   const handleReceiptClick = (customer: CustomerLedgerData) => {
@@ -483,6 +463,13 @@ export function Reports() {
       color: "#2B3068",
     },
     {
+      title: "Cleared Customers",
+      value: stats.clearedCustomers,
+      icon: UserCheck,
+      color: "text-green-500",
+      bgColor: "bg-green-100"
+    },
+    {
       title: "Gas Sales",
       value: stats.gasSales.toLocaleString(),
       icon: Fuel,
@@ -500,7 +487,7 @@ export function Reports() {
       icon: UserCheck,
       color: "#2B3068",
     },
-  ]
+  ];
 
   if (loading && customers.length === 0) {
     return (
@@ -576,9 +563,13 @@ export function Reports() {
                         <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
                           <span>TR: {customer.trNumber}</span>
                           <span>Phone: {customer.phone}</span>
-                          <span className="ml-auto">
-                            {getStatusBadge(customer.status)}
-                          </span>
+                          <TableCell className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                            {(() => {
+                              const dynamicStatus = customer.balance <= 0 ? 'cleared' : customer.status;
+                              // It then renders the badge with the correct, dynamic status.
+                              return getStatusBadge(dynamicStatus);
+                            })()}
+                          </TableCell>
                         </div>
                       </div>
                     </div>
@@ -693,7 +684,12 @@ export function Reports() {
                           <div className="text-gray-500">{formatCurrency(customer.totalCylinderAmount)}</div>
                         </div>
                       </TableCell>
-                      <TableCell>{getStatusBadge(customer.status)}</TableCell>
+                      <TableCell>
+                        {(() => {
+                          const dynamicStatus = customer.balance <= 0 ? 'cleared' : customer.status;
+                          return getStatusBadge(dynamicStatus);
+                        })()}
+                      </TableCell>
                       <TableCell>
                         <div className="text-sm">
                           {formatDate(customer.lastTransactionDate)}
@@ -724,33 +720,39 @@ export function Reports() {
                         <TableCell colSpan={10} className="bg-gray-50 p-6">
                           <Tabs defaultValue="all" className="w-full">
                             <TabsList className="grid w-full grid-cols-4">
-                              <TabsTrigger value="all">All Transactions ({(customer.recentSales?.length || 0) + (customer.recentCylinderTransactions?.length || 0)})</TabsTrigger>
-                              <TabsTrigger value="sales">Gas Sales ({customer.recentSales?.length || 0})</TabsTrigger>
+                              <TabsTrigger value="all">All Transactions</TabsTrigger>
+                              <TabsTrigger value="gas_sales">Gas Sales ({customer.recentSales?.length || 0})</TabsTrigger>
                               <TabsTrigger value="cylinders">Cylinder Mgmt ({customer.recentCylinderTransactions?.length || 0})</TabsTrigger>
                               <TabsTrigger value="summary">Summary</TabsTrigger>
                             </TabsList>
-                            
+
                             <TabsContent value="all" className="mt-4">
-                              {/* Combined transactions view */}
                               {(() => {
                                 const allTransactions = [
-                                  ...(customer.recentSales || []).map(sale => ({
-                                    ...sale,
+                                  ...(customer.recentSales || []).map(entry => ({
+                                    ...entry,
+                                    _id: `ledger-${entry._id}`,
+                                    createdAt: entry.date,
                                     type: 'gas_sale',
                                     displayType: 'Gas Sale',
-                                    amount: sale.totalAmount,
-                                    description: `Invoice #${sale.invoiceNumber}`,
-                                    status: sale.amountPaid >= sale.totalAmount ? 'paid' : 'pending'
+                                    description: entry.items.map((item: any) => `${item.name} (${item.quantity}x)`).join(', '),
+                                    amount: entry.totalAmount,
+                                    paidAmount: entry.paidAmount || 0,
+                                    status: entry.paymentStatus,
                                   })),
                                   ...(customer.recentCylinderTransactions || []).map(transaction => ({
                                     ...transaction,
-                                    type: 'cylinder',
+                                    _id: `cylinder-${transaction._id}`,
+                                    createdAt: transaction.createdAt,
+                                    type: transaction.type,
                                     displayType: `Cylinder ${transaction.type}`,
                                     description: `${transaction.cylinderSize} (${transaction.quantity}x)`,
-                                    amount: transaction.amount
+                                    amount: transaction.amount,
+                                    paidAmount: transaction.depositAmount || 0,
+                                    status: transaction.status,
                                   }))
-                                ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-                                
+                                ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
                                 return allTransactions.length > 0 ? (
                                   <Table>
                                     <TableHeader>
@@ -758,7 +760,8 @@ export function Reports() {
                                         <TableHead>Type</TableHead>
                                         <TableHead>Date</TableHead>
                                         <TableHead>Description</TableHead>
-                                        <TableHead>Amount</TableHead>
+                                        <TableHead>Total</TableHead>
+                                        <TableHead>Paid Amount</TableHead>
                                         <TableHead>Status</TableHead>
                                       </TableRow>
                                     </TableHeader>
@@ -776,6 +779,7 @@ export function Reports() {
                                           <TableCell>{formatDate(transaction.createdAt)}</TableCell>
                                           <TableCell>{transaction.description}</TableCell>
                                           <TableCell>{formatCurrency(transaction.amount)}</TableCell>
+                                          <TableCell>{formatCurrency(transaction.paidAmount || 0)}</TableCell>
                                           <TableCell>{getStatusBadge(transaction.status)}</TableCell>
                                         </TableRow>
                                       ))}
@@ -783,73 +787,86 @@ export function Reports() {
                                   </Table>
                                 ) : (
                                   <p className="text-gray-500 text-center py-4">No transactions found</p>
-                                )
-                              })()
-                              }
+                                );
+                              })()}
                             </TabsContent>
                             
-                            <TabsContent value="sales" className="mt-4">
+                            <TabsContent value="gas_sales" className="mt-4">
                               {customer.recentSales && customer.recentSales.length > 0 ? (
                                 <Table>
                                   <TableHeader>
                                     <TableRow>
                                       <TableHead>Invoice #</TableHead>
                                       <TableHead>Date</TableHead>
-                                      <TableHead>Total Amount</TableHead>
-                                      <TableHead>Amount Paid</TableHead>
+                                      <TableHead>Total</TableHead>
+                                      <TableHead>Paid Amount</TableHead>
+                                      <TableHead>Status</TableHead>
                                       <TableHead>Items</TableHead>
                                     </TableRow>
                                   </TableHeader>
                                   <TableBody>
-                                    {customer.recentSales.map((sale) => (
-                                      <TableRow key={sale._id}>
-                                        <TableCell className="font-mono">{sale.invoiceNumber}</TableCell>
-                                        <TableCell>{formatDate(sale.createdAt)}</TableCell>
-                                        <TableCell>{formatCurrency(sale.totalAmount || 0)}</TableCell>
-                                        <TableCell>{formatCurrency(sale.amountPaid || 0)}</TableCell>
-                                        <TableCell>{sale.items?.length || 0} items</TableCell>
-                                      </TableRow>
-                                    ))}
+                                    {customer.recentSales.map((sale) => {
+                                      console.log(`[Ledger Render] Sale: ${sale.invoiceNumber}, Status: ${sale.paymentStatus}`);
+                                      return (
+                                        <TableRow key={sale._id}>
+                                          <TableCell className="font-mono">{sale.invoiceNumber}</TableCell>
+                                          <TableCell>{formatDate(sale.createdAt)}</TableCell>
+                                          <TableCell>{formatCurrency(sale.totalAmount)}</TableCell>
+                                          <TableCell>{formatCurrency(sale.amountPaid || 0)}</TableCell>
+                                          <TableCell key={`${sale._id}-${sale.paymentStatus}`}>{getStatusBadge(sale.paymentStatus)}</TableCell>
+                                          <TableCell>
+                                            {sale.items?.map((item: any) => (
+                                              <div key={item._id || item.product?._id}>{item.product?.name || 'N/A'} (x{item.quantity})</div>
+                                            ))}
+                                          </TableCell>
+                                        </TableRow>
+                                      );
+                                    })}
                                   </TableBody>
                                 </Table>
                               ) : (
-                                <p className="text-gray-500 text-center py-4">No recent sales found</p>
+                                <div className="text-center text-gray-500 py-4">No gas sales found.</div>
                               )}
                             </TabsContent>
                             
                             <TabsContent value="cylinders" className="mt-4">
-                              {customer.recentCylinderTransactions && customer.recentCylinderTransactions.length > 0 ? (
-                                <Table>
-                                  <TableHeader>
-                                    <TableRow>
-                                      <TableHead>Type</TableHead>
-                                      <TableHead>Date</TableHead>
-                                      <TableHead>Cylinder Size</TableHead>
-                                      <TableHead>Quantity</TableHead>
-                                      <TableHead>Amount</TableHead>
-                                      <TableHead>Status</TableHead>
-                                    </TableRow>
-                                  </TableHeader>
-                                  <TableBody>
-                                    {customer.recentCylinderTransactions.map((transaction) => (
-                                      <TableRow key={transaction._id}>
-                                        <TableCell>
-                                          <Badge variant="outline" className="capitalize">
-                                            {transaction.type}
-                                          </Badge>
-                                        </TableCell>
-                                        <TableCell>{formatDate(transaction.createdAt)}</TableCell>
-                                        <TableCell>{transaction.cylinderSize}</TableCell>
-                                        <TableCell>{transaction.quantity}</TableCell>
-                                        <TableCell>{formatCurrency(transaction.amount)}</TableCell>
-                                        <TableCell>{getStatusBadge(transaction.status)}</TableCell>
+                              {(() => {
+                                const customerCylinderTransactions = customer.recentCylinderTransactions || [];
+                                return customerCylinderTransactions.length > 0 ? (
+                                  <Table>
+                                    <TableHeader>
+                                      <TableRow>
+                                        <TableHead>Type</TableHead>
+                                        <TableHead>Date</TableHead>
+                                        <TableHead>Cylinder Size</TableHead>
+                                        <TableHead>Quantity</TableHead>
+                                        <TableHead>Amount</TableHead>
+                                        <TableHead>Paid Amount</TableHead>
+                                        <TableHead>Status</TableHead>
                                       </TableRow>
-                                    ))}
-                                  </TableBody>
-                                </Table>
-                              ) : (
-                                <p className="text-gray-500 text-center py-4">No recent cylinder transactions found</p>
-                              )}
+                                    </TableHeader>
+                                    <TableBody>
+                                      {customerCylinderTransactions.map((transaction) => (
+                                          <TableRow key={transaction._id}>
+                                            <TableCell>
+                                              <Badge variant="outline" className="capitalize">
+                                                {transaction.type}
+                                              </Badge>
+                                            </TableCell>
+                                            <TableCell>{formatDate(transaction.createdAt)}</TableCell>
+                                            <TableCell>{transaction.cylinderSize}</TableCell>
+                                            <TableCell>{transaction.quantity}</TableCell>
+                                            <TableCell>{formatCurrency(transaction.amount)}</TableCell>
+                                            <TableCell>{formatCurrency(transaction.amount || 0)}</TableCell>
+                                            <TableCell>{getStatusBadge(transaction.status)}</TableCell>
+                                          </TableRow>
+                                        ))}
+                                    </TableBody>
+                                  </Table>
+                                ) : (
+                                  <p className="text-gray-500 text-center py-4">No recent cylinder transactions found</p>
+                                );
+                              })()}
                             </TabsContent>
                             
                             <TabsContent value="summary" className="mt-4">
