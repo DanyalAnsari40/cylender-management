@@ -844,7 +844,7 @@ const [saleForSignature, setSaleForSignature] = useState<any | null>(null);
         <SignatureDialog
           isOpen={isSignatureDialogOpen}
           onClose={() => setIsSignatureDialogOpen(false)}
-          onComplete={handleSignatureComplete}
+          onSignatureComplete={handleSignatureComplete}
           customerName={saleForSignature.customer.name}
         />
       )}

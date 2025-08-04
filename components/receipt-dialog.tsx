@@ -75,31 +75,9 @@ export function ReceiptDialog({ sale, signature, onClose }: ReceiptDialogProps) 
   }
 
   const handlePrint = () => {
-    // Use CSS to hide non-printable elements and print the current page
-    const printStyles = `
-      <style>
-        @media print {
-          .no-print {
-            display: none !important;
-          }
-          .print-area {
-            display: block !important;
-          }
-        }
-      </style>
-    `
-    
-    // Add print styles to head
-    const head = document.getElementsByTagName('head')[0]
-    const style = document.createElement('style')
-    style.innerHTML = printStyles
-    head.appendChild(style)
-    
-    // Print the page
-    window.print()
-    
-    // Remove the print styles after printing
-    head.removeChild(style)
+    // Store the sale data in sessionStorage to pass it to the print page
+    sessionStorage.setItem('printReceiptData', JSON.stringify(sale));
+    window.open(`/print/receipt/${sale._id}`, '_blank');
   }
 
   const handleDownload = () => {
