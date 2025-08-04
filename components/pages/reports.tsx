@@ -97,30 +97,40 @@ export function Reports() {
       
       // Use the same data structure as "All Transactions" tab for receipt generation
       const allTransactions = [
-        // Add gas sales transactions
-        ...(pendingCustomer.recentSales || []).map(entry => ({
-          ...entry,
-          _id: `ledger-${entry._id}`,
-          createdAt: entry.createdAt,
-          type: 'gas_sale',
-          displayType: 'Gas Sale',
-          description: entry.items.map((item: any) => `${item.product?.name || 'Unknown Product'} (${item.quantity}x)`).join(', '),
-          amount: entry.totalAmount,
-          paidAmount: entry.amountPaid || 0,
-          status: entry.paymentStatus,
-        })),
-        // Add cylinder transactions (EXCLUDE refills from amount calculations)
-        ...(pendingCustomer.recentCylinderTransactions || []).map(transaction => ({
-          ...transaction,
-          _id: `cylinder-${transaction._id}`,
-          createdAt: transaction.createdAt,
-          type: transaction.type,
-          displayType: `Cylinder ${transaction.type}`,
-          description: `${transaction.cylinderSize} (${transaction.quantity}x)`,
-          amount: transaction.amount,
-          paidAmount: transaction.type === 'refill' ? 0 : (transaction.amount || 0), // EXCLUDE refill amounts
-          status: transaction.status,
-        }))
+        // Add gas sales transactions (filter by status if needed)
+        ...(pendingCustomer.recentSales || [])
+          .filter(entry => {
+            if (filters.status === 'all') return true;
+            return entry.paymentStatus === filters.status;
+          })
+          .map(entry => ({
+            ...entry,
+            _id: `ledger-${entry._id}`,
+            createdAt: entry.createdAt,
+            type: 'gas_sale',
+            displayType: 'Gas Sale',
+            description: entry.items.map((item: any) => `${item.product?.name || 'Unknown Product'} (${item.quantity}x)`).join(', '),
+            amount: entry.totalAmount,
+            paidAmount: entry.amountPaid || 0,
+            status: entry.paymentStatus,
+          })),
+        // Add cylinder transactions (filter by status if needed, EXCLUDE refills from amount calculations)
+        ...(pendingCustomer.recentCylinderTransactions || [])
+          .filter(transaction => {
+            if (filters.status === 'all') return true;
+            return transaction.status === filters.status;
+          })
+          .map(transaction => ({
+            ...transaction,
+            _id: `cylinder-${transaction._id}`,
+            createdAt: transaction.createdAt,
+            type: transaction.type,
+            displayType: `Cylinder ${transaction.type}`,
+            description: `${transaction.cylinderSize} (${transaction.quantity}x)`,
+            amount: transaction.amount,
+            paidAmount: transaction.type === 'refill' ? 0 : (transaction.amount || 0), // EXCLUDE refill amounts
+            status: transaction.status,
+          }))
       ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
       // Create receipt items from All Transactions data
@@ -320,30 +330,40 @@ export function Reports() {
     } else {
       // Use the same data structure as "All Transactions" tab for receipt generation
       const allTransactions = [
-        // Add gas sales transactions
-        ...(customer.recentSales || []).map(entry => ({
-          ...entry,
-          _id: `ledger-${entry._id}`,
-          createdAt: entry.createdAt,
-          type: 'gas_sale',
-          displayType: 'Gas Sale',
-          description: entry.items.map((item: any) => `${item.product?.name || 'Unknown Product'} (${item.quantity}x)`).join(', '),
-          amount: entry.totalAmount,
-          paidAmount: entry.amountPaid || 0,
-          status: entry.paymentStatus,
-        })),
-        // Add cylinder transactions (EXCLUDE refills from amount calculations)
-        ...(customer.recentCylinderTransactions || []).map(transaction => ({
-          ...transaction,
-          _id: `cylinder-${transaction._id}`,
-          createdAt: transaction.createdAt,
-          type: transaction.type,
-          displayType: `Cylinder ${transaction.type}`,
-          description: `${transaction.cylinderSize} (${transaction.quantity}x)`,
-          amount: transaction.amount,
-          paidAmount: transaction.type === 'refill' ? 0 : (transaction.amount || 0), // EXCLUDE refill amounts
-          status: transaction.status,
-        }))
+        // Add gas sales transactions (filter by status if needed)
+        ...(customer.recentSales || [])
+          .filter(entry => {
+            if (filters.status === 'all') return true;
+            return entry.paymentStatus === filters.status;
+          })
+          .map(entry => ({
+            ...entry,
+            _id: `ledger-${entry._id}`,
+            createdAt: entry.createdAt,
+            type: 'gas_sale',
+            displayType: 'Gas Sale',
+            description: entry.items.map((item: any) => `${item.product?.name || 'Unknown Product'} (${item.quantity}x)`).join(', '),
+            amount: entry.totalAmount,
+            paidAmount: entry.amountPaid || 0,
+            status: entry.paymentStatus,
+          })),
+        // Add cylinder transactions (filter by status if needed, EXCLUDE refills from amount calculations)
+        ...(customer.recentCylinderTransactions || [])
+          .filter(transaction => {
+            if (filters.status === 'all') return true;
+            return transaction.status === filters.status;
+          })
+          .map(transaction => ({
+            ...transaction,
+            _id: `cylinder-${transaction._id}`,
+            createdAt: transaction.createdAt,
+            type: transaction.type,
+            displayType: `Cylinder ${transaction.type}`,
+            description: `${transaction.cylinderSize} (${transaction.quantity}x)`,
+            amount: transaction.amount,
+            paidAmount: transaction.type === 'refill' ? 0 : (transaction.amount || 0), // EXCLUDE refill amounts
+            status: transaction.status,
+          }))
       ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
       // Create receipt items from All Transactions data
@@ -583,7 +603,25 @@ export function Reports() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {customers.map((customer) => (
+                {customers
+                  .filter((customer) => {
+                    // Filter by status
+                    if (filters.status !== 'all') {
+                      const dynamicStatus = customer.balance <= 0 ? 'cleared' : customer.status;
+                      if (dynamicStatus !== filters.status) {
+                        return false;
+                      }
+                    }
+                    
+                    // Filter by customer name
+                    if (filters.customerName.trim() !== '') {
+                      return customer.name.toLowerCase().includes(filters.customerName.toLowerCase()) ||
+                             customer.trNumber.toLowerCase().includes(filters.customerName.toLowerCase());
+                    }
+                    
+                    return true;
+                  })
+                  .map((customer) => (
                   <React.Fragment key={customer._id}>
                     <TableRow className="cursor-pointer hover:bg-gray-50">
                       <TableCell className="p-4">
@@ -670,28 +708,40 @@ export function Reports() {
                             <TabsContent value="all" className="mt-4">
                               {(() => {
                                 const allTransactions = [
-                                  ...(customer.recentSales || []).map(entry => ({
-                                    ...entry,
-                                    _id: `ledger-${entry._id}`,
-                                    createdAt: entry.createdAt,
-                                    type: 'gas_sale',
-                                    displayType: 'Gas Sale',
-                                    description: entry.items.map((item: any) => `${item.product?.name || 'Unknown Product'} (${item.quantity}x)`).join(', '),
-                                    amount: entry.totalAmount,
-                                    paidAmount: entry.amountPaid || 0,
-                                    status: entry.paymentStatus,
-                                  })),
-                                  ...(customer.recentCylinderTransactions || []).map(transaction => ({
-                                    ...transaction,
-                                    _id: `cylinder-${transaction._id}`,
-                                    createdAt: transaction.createdAt,
-                                    type: transaction.type,
-                                    displayType: `Cylinder ${transaction.type}`,
-                                    description: `${transaction.cylinderSize} (${transaction.quantity}x)`,
-                                    amount: transaction.amount,
-                                    paidAmount: transaction.amount || 0,
-                                    status: transaction.status,
-                                  }))
+                                  // Add gas sales transactions (filter by status if needed)
+                                  ...(customer.recentSales || [])
+                                    .filter(entry => {
+                                      if (filters.status === 'all') return true;
+                                      return entry.paymentStatus === filters.status;
+                                    })
+                                    .map(entry => ({
+                                      ...entry,
+                                      _id: `ledger-${entry._id}`,
+                                      createdAt: entry.createdAt,
+                                      type: 'gas_sale',
+                                      displayType: 'Gas Sale',
+                                      description: entry.items.map((item: any) => `${item.product?.name || 'Unknown Product'} (${item.quantity}x)`).join(', '),
+                                      amount: entry.totalAmount,
+                                      paidAmount: entry.amountPaid || 0,
+                                      status: entry.paymentStatus,
+                                    })),
+                                  // Add cylinder transactions (filter by status if needed)
+                                  ...(customer.recentCylinderTransactions || [])
+                                    .filter(transaction => {
+                                      if (filters.status === 'all') return true;
+                                      return transaction.status === filters.status;
+                                    })
+                                    .map(transaction => ({
+                                      ...transaction,
+                                      _id: `cylinder-${transaction._id}`,
+                                      createdAt: transaction.createdAt,
+                                      type: transaction.type,
+                                      displayType: `Cylinder ${transaction.type}`,
+                                      description: `${transaction.cylinderSize} (${transaction.quantity}x)`,
+                                      amount: transaction.amount,
+                                      paidAmount: transaction.amount || 0,
+                                      status: transaction.status,
+                                    }))
                                 ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
                                 return allTransactions.length > 0 ? (
@@ -733,47 +783,58 @@ export function Reports() {
                             </TabsContent>
                             
                             <TabsContent value="gas_sales" className="mt-4">
-                              {customer.recentSales && customer.recentSales.length > 0 ? (
-                                <Table>
-                                  <TableHeader>
-                                    <TableRow>
-                                      <TableHead>Invoice #</TableHead>
-                                      <TableHead>Date</TableHead>
-                                      <TableHead>Total</TableHead>
-                                      <TableHead>Paid Amount</TableHead>
-                                      <TableHead>Status</TableHead>
-                                      <TableHead>Items</TableHead>
-                                    </TableRow>
-                                  </TableHeader>
-                                  <TableBody>
-                                    {customer.recentSales.map((sale) => {
-                                      console.log(`[Ledger Render] Sale: ${sale.invoiceNumber}, Status: ${sale.paymentStatus}`);
-                                      return (
-                                        <TableRow key={sale._id}>
-                                          <TableCell className="font-mono">{sale.invoiceNumber}</TableCell>
-                                          <TableCell>{formatDate(sale.createdAt)}</TableCell>
-                                          <TableCell>{formatCurrency(sale.totalAmount)}</TableCell>
-                                          <TableCell>{formatCurrency(sale.amountPaid || 0)}</TableCell>
-                                          <TableCell key={`${sale._id}-${sale.paymentStatus}`}>{getStatusBadge(sale.paymentStatus)}</TableCell>
-                                          <TableCell>
-                                            {sale.items?.map((item: any) => (
-                                              <div key={item._id || item.product?._id}>{item.product?.name || 'N/A'} (x{item.quantity})</div>
-                                            ))}
-                                          </TableCell>
-                                        </TableRow>
-                                      );
-                                    })}
-                                  </TableBody>
-                                </Table>
-                              ) : (
-                                <div className="text-center text-gray-500 py-4">No gas sales found.</div>
-                              )}
+                              {(() => {
+                                const filteredSales = customer.recentSales?.filter(sale => {
+                                  if (filters.status === 'all') return true;
+                                  return sale.paymentStatus === filters.status;
+                                }) || [];
+                                
+                                return filteredSales.length > 0 ? (
+                                  <Table>
+                                    <TableHeader>
+                                      <TableRow>
+                                        <TableHead>Invoice #</TableHead>
+                                        <TableHead>Date</TableHead>
+                                        <TableHead>Total</TableHead>
+                                        <TableHead>Paid Amount</TableHead>
+                                        <TableHead>Status</TableHead>
+                                        <TableHead>Items</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {filteredSales.map((sale) => {
+                                        console.log(`[Ledger Render] Sale: ${sale.invoiceNumber}, Status: ${sale.paymentStatus}`);
+                                        return (
+                                          <TableRow key={sale._id}>
+                                            <TableCell className="font-mono">{sale.invoiceNumber}</TableCell>
+                                            <TableCell>{formatDate(sale.createdAt)}</TableCell>
+                                            <TableCell>{formatCurrency(sale.totalAmount)}</TableCell>
+                                            <TableCell>{formatCurrency(sale.amountPaid || 0)}</TableCell>
+                                            <TableCell key={`${sale._id}-${sale.paymentStatus}`}>{getStatusBadge(sale.paymentStatus)}</TableCell>
+                                            <TableCell>
+                                              {sale.items?.map((item: any) => (
+                                                <div key={item._id || item.product?._id}>{item.product?.name || 'N/A'} (x{item.quantity})</div>
+                                              ))}
+                                            </TableCell>
+                                          </TableRow>
+                                        );
+                                      })}
+                                    </TableBody>
+                                  </Table>
+                                ) : (
+                                  <div className="text-center text-gray-500 py-4">No gas sales found.</div>
+                                );
+                              })()}
                             </TabsContent>
                             
                             <TabsContent value="cylinders" className="mt-4">
                               {(() => {
-                                const customerCylinderTransactions = customer.recentCylinderTransactions || [];
-                                return customerCylinderTransactions.length > 0 ? (
+                                const filteredCylinderTransactions = customer.recentCylinderTransactions?.filter(transaction => {
+                                  if (filters.status === 'all') return true;
+                                  return transaction.status === filters.status;
+                                }) || [];
+                                
+                                return filteredCylinderTransactions.length > 0 ? (
                                   <Table>
                                     <TableHeader>
                                       <TableRow>
@@ -787,7 +848,7 @@ export function Reports() {
                                       </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                      {customerCylinderTransactions.map((transaction) => (
+                                      {filteredCylinderTransactions.map((transaction) => (
                                           <TableRow key={transaction._id}>
                                             <TableCell>
                                               <Badge variant="outline" className="capitalize">
