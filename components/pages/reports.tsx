@@ -95,84 +95,55 @@ export function Reports() {
     if (pendingCustomer) {
       console.log('Reports - Opening receipt dialog with signature embedded')
       
-      // Create detailed items array with all customer statement information
-      const items = []
-      
-      // Add financial summary items
-      if (pendingCustomer.totalSalesAmount > 0) {
-        items.push({
-          product: { name: "Gas Sales Total", price: pendingCustomer.totalSalesAmount },
-          quantity: pendingCustomer.totalSales,
-          price: pendingCustomer.totalSalesAmount / pendingCustomer.totalSales || 0,
-          total: pendingCustomer.totalSalesAmount
-        })
-      }
-      
-      if (pendingCustomer.totalCylinderAmount > 0) {
-        items.push({
-          product: { name: "Cylinder Transactions Total", price: pendingCustomer.totalCylinderAmount },
-          quantity: pendingCustomer.totalDeposits + pendingCustomer.totalRefills + pendingCustomer.totalReturns,
-          price: pendingCustomer.totalCylinderAmount / (pendingCustomer.totalDeposits + pendingCustomer.totalRefills + pendingCustomer.totalReturns) || 0,
-          total: pendingCustomer.totalCylinderAmount
-        })
-      }
-      
-      // Add recent sales as individual items
-      if (pendingCustomer.recentSales && pendingCustomer.recentSales.length > 0) {
-        pendingCustomer.recentSales.forEach((sale: any, index: number) => {
-          items.push({
-            product: { 
-              name: `Sale #${sale.invoiceNumber || `${index + 1}`}`, 
-              price: sale.totalAmount || 0 
-            },
-            quantity: 1,
-            price: sale.totalAmount || 0,
-            total: sale.totalAmount || 0
-          })
-        })
-      }
-      
-      // Add recent cylinder transactions as individual items
-      if (pendingCustomer.recentCylinderTransactions && pendingCustomer.recentCylinderTransactions.length > 0) {
-        pendingCustomer.recentCylinderTransactions.forEach((transaction: any, index: number) => {
-          items.push({
-            product: { 
-              name: `${transaction.type || 'Transaction'} - ${transaction.cylinderSize || 'Unknown'}kg`, 
-              price: transaction.amount || 0 
-            },
-            quantity: transaction.quantity || 1,
-            price: transaction.amount || 0,
-            total: transaction.amount || 0
-          })
-        })
-      }
-      
-      // Add balance summary items
-      if (pendingCustomer.totalDebit > 0) {
-        items.push({
-          product: { name: "Total Debit", price: pendingCustomer.totalDebit },
-          quantity: 1,
-          price: pendingCustomer.totalDebit,
-          total: pendingCustomer.totalDebit
-        })
-      }
-      
-      if (pendingCustomer.totalCredit > 0) {
-        items.push({
-          product: { name: "Total Credit", price: -pendingCustomer.totalCredit },
-          quantity: 1,
-          price: -pendingCustomer.totalCredit,
-          total: -pendingCustomer.totalCredit
-        })
-      }
+      // Use the same data structure as "All Transactions" tab for receipt generation
+      const allTransactions = [
+        // Add gas sales transactions
+        ...(pendingCustomer.recentSales || []).map(entry => ({
+          ...entry,
+          _id: `ledger-${entry._id}`,
+          createdAt: entry.createdAt,
+          type: 'gas_sale',
+          displayType: 'Gas Sale',
+          description: entry.items.map((item: any) => `${item.product?.name || 'Unknown Product'} (${item.quantity}x)`).join(', '),
+          amount: entry.totalAmount,
+          paidAmount: entry.amountPaid || 0,
+          status: entry.paymentStatus,
+        })),
+        // Add cylinder transactions (EXCLUDE refills from amount calculations)
+        ...(pendingCustomer.recentCylinderTransactions || []).map(transaction => ({
+          ...transaction,
+          _id: `cylinder-${transaction._id}`,
+          createdAt: transaction.createdAt,
+          type: transaction.type,
+          displayType: `Cylinder ${transaction.type}`,
+          description: `${transaction.cylinderSize} (${transaction.quantity}x)`,
+          amount: transaction.amount,
+          paidAmount: transaction.type === 'refill' ? 0 : (transaction.amount || 0), // EXCLUDE refill amounts
+          status: transaction.status,
+        }))
+      ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      // Create receipt items from All Transactions data
+      const items = allTransactions.map((transaction, index) => ({
+        product: {
+          name: `${transaction.displayType} - ${transaction.description}`,
+          price: transaction.paidAmount
+        },
+        quantity: transaction.type === 'gas_sale' ? (transaction.items?.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0) || 1) : (transaction.quantity || 1),
+        price: transaction.paidAmount,
+        total: transaction.paidAmount
+      }));
+
+      // Calculate total amount (excluding refills)
+      const totalAmount = allTransactions.reduce((sum, transaction) => sum + (transaction.paidAmount || 0), 0);
       
       // If no items, add a placeholder
       if (items.length === 0) {
         items.push({
-          product: { name: "Account Statement", price: pendingCustomer.balance },
+          product: { name: "No transactions found", price: 0 },
           quantity: 1,
-          price: pendingCustomer.balance,
-          total: pendingCustomer.balance
+          price: 0,
+          total: 0
         })
       }
       
@@ -185,7 +156,7 @@ export function Reports() {
           address: pendingCustomer.address
         },
         items: items,
-        totalAmount: pendingCustomer.balance,
+        totalAmount: totalAmount,
         paymentMethod: "Account Statement",
         paymentStatus: pendingCustomer.status,
         createdAt: pendingCustomer.lastTransactionDate || new Date().toISOString(),
@@ -347,85 +318,55 @@ export function Reports() {
       setPendingCustomer(customer)
       setShowSignatureDialog(true)
     } else {
-      // Signature already exists - show receipt directly with existing signature
-      // Create detailed items array with all customer statement information
-      const items = []
-      
-      // Add financial summary items
-      if (customer.totalSalesAmount > 0) {
-        items.push({
-          product: { name: "Gas Sales Total", price: customer.totalSalesAmount },
-          quantity: customer.totalSales,
-          price: customer.totalSalesAmount / customer.totalSales || 0,
-          total: customer.totalSalesAmount
-        })
-      }
-      
-      if (customer.totalCylinderAmount > 0) {
-        items.push({
-          product: { name: "Cylinder Transactions Total", price: customer.totalCylinderAmount },
-          quantity: customer.totalDeposits + customer.totalRefills + customer.totalReturns,
-          price: customer.totalCylinderAmount / (customer.totalDeposits + customer.totalRefills + customer.totalReturns) || 0,
-          total: customer.totalCylinderAmount
-        })
-      }
-      
-      // Add recent sales as individual items
-      if (customer.recentSales && customer.recentSales.length > 0) {
-        customer.recentSales.forEach((sale: any, index: number) => {
-          items.push({
-            product: { 
-              name: `Sale #${sale.invoiceNumber || `${index + 1}`}`, 
-              price: sale.totalAmount || 0 
-            },
-            quantity: 1,
-            price: sale.totalAmount || 0,
-            total: sale.totalAmount || 0
-          })
-        })
-      }
-      
-      // Add recent cylinder transactions as individual items
-      if (customer.recentCylinderTransactions && customer.recentCylinderTransactions.length > 0) {
-        customer.recentCylinderTransactions.forEach((transaction: any, index: number) => {
-          items.push({
-            product: { 
-              name: `${transaction.type || 'Transaction'} - ${transaction.cylinderSize || 'Unknown'}kg`, 
-              price: transaction.amount || 0 
-            },
-            quantity: transaction.quantity || 1,
-            price: transaction.amount || 0,
-            total: transaction.amount || 0
-          })
-        })
-      }
-      
-      // Add balance summary items
-      if (customer.totalDebit > 0) {
-        items.push({
-          product: { name: "Total Debit", price: customer.totalDebit },
-          quantity: 1,
-          price: customer.totalDebit,
-          total: customer.totalDebit
-        })
-      }
-      
-      if (customer.totalCredit > 0) {
-        items.push({
-          product: { name: "Total Credit", price: -customer.totalCredit },
-          quantity: 1,
-          price: -customer.totalCredit,
-          total: -customer.totalCredit
-        })
-      }
+      // Use the same data structure as "All Transactions" tab for receipt generation
+      const allTransactions = [
+        // Add gas sales transactions
+        ...(customer.recentSales || []).map(entry => ({
+          ...entry,
+          _id: `ledger-${entry._id}`,
+          createdAt: entry.createdAt,
+          type: 'gas_sale',
+          displayType: 'Gas Sale',
+          description: entry.items.map((item: any) => `${item.product?.name || 'Unknown Product'} (${item.quantity}x)`).join(', '),
+          amount: entry.totalAmount,
+          paidAmount: entry.amountPaid || 0,
+          status: entry.paymentStatus,
+        })),
+        // Add cylinder transactions (EXCLUDE refills from amount calculations)
+        ...(customer.recentCylinderTransactions || []).map(transaction => ({
+          ...transaction,
+          _id: `cylinder-${transaction._id}`,
+          createdAt: transaction.createdAt,
+          type: transaction.type,
+          displayType: `Cylinder ${transaction.type}`,
+          description: `${transaction.cylinderSize} (${transaction.quantity}x)`,
+          amount: transaction.amount,
+          paidAmount: transaction.type === 'refill' ? 0 : (transaction.amount || 0), // EXCLUDE refill amounts
+          status: transaction.status,
+        }))
+      ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      // Create receipt items from All Transactions data
+      const items = allTransactions.map((transaction, index) => ({
+        product: {
+          name: `${transaction.displayType} - ${transaction.description}`,
+          price: transaction.paidAmount
+        },
+        quantity: transaction.type === 'gas_sale' ? (transaction.items?.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0) || 1) : (transaction.quantity || 1),
+        price: transaction.paidAmount,
+        total: transaction.paidAmount
+      }));
+
+      // Calculate total amount (excluding refills)
+      const totalAmount = allTransactions.reduce((sum, transaction) => sum + (transaction.paidAmount || 0), 0);
       
       // If no items, add a placeholder
       if (items.length === 0) {
         items.push({
-          product: { name: "Account Statement", price: customer.balance },
+          product: { name: "No transactions found", price: 0 },
           quantity: 1,
-          price: customer.balance,
-          total: customer.balance
+          price: 0,
+          total: 0
         })
       }
       
@@ -438,7 +379,7 @@ export function Reports() {
           address: customer.address
         },
         items: items,
-        totalAmount: customer.balance,
+        totalAmount: totalAmount,
         paymentMethod: "Account Statement",
         paymentStatus: customer.status,
         createdAt: customer.lastTransactionDate || new Date().toISOString(),
@@ -633,7 +574,7 @@ export function Reports() {
                   <TableHead>Customer Name</TableHead>
                   <TableHead>TR Number</TableHead>
                   <TableHead>Contact</TableHead>
-                  <TableHead>Balance</TableHead>
+                  <TableHead>Total Paid Amount</TableHead>
                   <TableHead>Total Sales</TableHead>
                   <TableHead>Cylinder Transactions</TableHead>
                   <TableHead>Status</TableHead>
@@ -674,8 +615,8 @@ export function Reports() {
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">
-                          <div>{customer.totalSales} sales</div>
-                          <div className="text-gray-500">{formatCurrency(customer.totalSalesAmount)}</div>
+                          <div>{customer.totalSales + customer.totalDeposits + customer.totalRefills + customer.totalReturns} transactions</div>
+                          <div className="text-gray-500">{formatCurrency((customer.totalSalesAmount || 0) + (customer.totalCylinderAmount || 0))}</div>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -732,12 +673,12 @@ export function Reports() {
                                   ...(customer.recentSales || []).map(entry => ({
                                     ...entry,
                                     _id: `ledger-${entry._id}`,
-                                    createdAt: entry.date,
+                                    createdAt: entry.createdAt,
                                     type: 'gas_sale',
                                     displayType: 'Gas Sale',
-                                    description: entry.items.map((item: any) => `${item.name} (${item.quantity}x)`).join(', '),
+                                    description: entry.items.map((item: any) => `${item.product?.name || 'Unknown Product'} (${item.quantity}x)`).join(', '),
                                     amount: entry.totalAmount,
-                                    paidAmount: entry.paidAmount || 0,
+                                    paidAmount: entry.amountPaid || 0,
                                     status: entry.paymentStatus,
                                   })),
                                   ...(customer.recentCylinderTransactions || []).map(transaction => ({
@@ -748,7 +689,7 @@ export function Reports() {
                                     displayType: `Cylinder ${transaction.type}`,
                                     description: `${transaction.cylinderSize} (${transaction.quantity}x)`,
                                     amount: transaction.amount,
-                                    paidAmount: transaction.depositAmount || 0,
+                                    paidAmount: transaction.amount || 0,
                                     status: transaction.status,
                                   }))
                                 ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());

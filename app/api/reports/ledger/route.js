@@ -93,8 +93,8 @@ export async function GET(request) {
           const totalRefills = cylinderTransactions.filter(t => t.type === 'refill').length;
           const totalReturns = cylinderTransactions.filter(t => t.type === 'return').length;
 
-          // Determine overall status based on balance, transactions, and individual transaction statuses
-          const balance = customer.balance || 0;
+          // Calculate balance as total of all paid amounts from transactions
+          const balance = totalPaidAmount + totalCylinderAmount;
           const hasRecentTransactions = [...sales, ...cylinderTransactions].some(
             t => new Date(t.createdAt) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // 30 days
           );
