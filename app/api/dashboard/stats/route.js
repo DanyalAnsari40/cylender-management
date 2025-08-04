@@ -61,23 +61,41 @@ export async function GET() {
     const productsSold = productsSoldResult[0]?.totalQuantity || 0
 
     // Calculate total combined revenue
-    const totalCombinedRevenue = gasSales.gasSalesRevenue + cylinderRevenue.cylinderRevenue
+    const totalCombinedRevenue = (gasSales.gasSalesRevenue || 0) + (cylinderRevenue.cylinderRevenue || 0)
 
-    return NextResponse.json({
-      totalRevenue: totalCombinedRevenue, // Total business revenue (gas + cylinder)
-      gasSales: gasSales.gasSalesRevenue, // Total gas sales revenue
-      cylinderRefills: cylinderRevenue.cylinderRevenue, // Cylinder revenue
-      totalDue: gasSales.totalDue, // Outstanding amounts
-      totalCustomers: customerCount,
-      totalEmployees: employeeCount,
-      totalProducts: productCount,
-      productsSold: productsSold,
-      totalSales: gasSales.totalSales,
-      totalCombinedRevenue: totalCombinedRevenue,
-      totalPaid: gasSales.gasSalesPaid, // Amount actually received
-    })
+    // Ensure all values are numbers and not null/undefined
+    const statsResponse = {
+      totalRevenue: Number(totalCombinedRevenue) || 0, // Total business revenue (gas + cylinder)
+      gasSales: Number(gasSales.gasSalesRevenue) || 0, // Total gas sales revenue
+      cylinderRefills: Number(cylinderRevenue.cylinderRevenue) || 0, // Cylinder revenue
+      totalDue: Number(gasSales.totalDue) || 0, // Outstanding amounts
+      totalCustomers: Number(customerCount) || 0,
+      totalEmployees: Number(employeeCount) || 0,
+      totalProducts: Number(productCount) || 0,
+      productsSold: Number(productsSold) || 0,
+      totalSales: Number(gasSales.totalSales) || 0,
+      totalCombinedRevenue: Number(totalCombinedRevenue) || 0,
+      totalPaid: Number(gasSales.gasSalesPaid) || 0, // Amount actually received
+    }
+
+    console.log('Dashboard stats response:', statsResponse)
+    return NextResponse.json(statsResponse)
   } catch (error) {
     console.error("Dashboard stats error:", error)
-    return NextResponse.json({ error: "Failed to fetch dashboard stats" }, { status: 500 })
+    // Return default zeros when there's an error to ensure frontend displays 0 values
+    return NextResponse.json({
+      totalRevenue: 0,
+      gasSales: 0,
+      cylinderRefills: 0,
+      totalDue: 0,
+      totalCustomers: 0,
+      totalEmployees: 0,
+      totalProducts: 0,
+      productsSold: 0,
+      totalSales: 0,
+      totalCombinedRevenue: 0,
+      totalPaid: 0,
+      error: "Failed to fetch dashboard stats"
+    }, { status: 200 }) // Return 200 status with error message so frontend can still show 0 values
   }
 }

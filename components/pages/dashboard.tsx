@@ -25,24 +25,25 @@ export function Dashboard() {
   const fetchStats = async () => {
     try {
       const response = await dashboardAPI.getStats()
-      // console.log('Dashboard stats response:', response.data)
+      console.log('Dashboard stats response:', response.data)
       
       // Handle nested data structure if needed
       const statsData = response.data?.data || response.data || {}
       
       setStats({
-        totalRevenue: statsData.totalRevenue || 0,
-        totalDue: statsData.totalDue || 0,
-        totalCustomers: statsData.totalCustomers || 0,
-        totalEmployees: statsData.totalEmployees || 0,
-        productsSold: statsData.productsSold || 0,
-        totalSales: statsData.totalSales || 0,
-        gasSales: statsData.gasSales || 0,
-        cylinderRevenue: statsData.cylinderRefills || 0,
+        totalRevenue: Number(statsData.totalRevenue || 0),
+        totalDue: Number(statsData.totalDue || 0),
+        totalCustomers: Number(statsData.totalCustomers || 0),
+        totalEmployees: Number(statsData.totalEmployees || 0),
+        productsSold: Number(statsData.productsSold || 0),
+        totalSales: Number(statsData.totalSales || 0),
+        gasSales: Number(statsData.gasSales || 0),
+        cylinderRevenue: Number(statsData.cylinderRefills || 0),
       })
     } catch (error) {
       console.error("Failed to fetch stats:", error)
-      // Set default values on error
+      // console.error("Error details:", error.response?.data || error.message)
+      // Set default values on error - ensure they are displayed as 0
       setStats({
         totalRevenue: 0,
         totalDue: 0,

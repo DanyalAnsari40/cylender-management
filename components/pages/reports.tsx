@@ -207,18 +207,20 @@ export function Reports() {
         reportsAPI.getStats()
       ])
 
+      console.log('Reports stats response:', statsResponse.data)
+
       if (statsResponse.data.success) {
         const statsData = statsResponse.data.data
         setStats({
-          totalRevenue: statsData.totalRevenue || 0,
-          totalEmployees: statsData.totalEmployees || 0,
-          gasSales: statsData.gasSales || 0,
-          cylinderRefills: statsData.cylinderRefills || 0,
-          totalCustomers: statsData.totalCustomers || 0,
-          totalCombinedRevenue: statsData.totalCombinedRevenue || 0,
-          pendingCustomers: statsData.pendingCustomers || 0,
-          overdueCustomers: statsData.overdueCustomers || 0,
-          clearedCustomers: statsData.clearedCustomers || 0
+          totalRevenue: Number(statsData.totalRevenue) || 0,
+          totalEmployees: Number(statsData.totalEmployees) || 0,
+          gasSales: Number(statsData.gasSales) || 0,
+          cylinderRefills: Number(statsData.cylinderRefills) || 0,
+          totalCustomers: Number(statsData.totalCustomers) || 0,
+          totalCombinedRevenue: Number(statsData.totalCombinedRevenue) || 0,
+          pendingCustomers: Number(statsData.pendingCustomers) || 0,
+          overdueCustomers: Number(statsData.overdueCustomers) || 0,
+          clearedCustomers: Number(statsData.clearedCustomers) || 0
         })
       }
 
@@ -226,6 +228,19 @@ export function Reports() {
       await fetchLedgerData()
     } catch (error) {
       console.error("Failed to fetch report data:", error)
+      console.error("Error details:", error.response?.data || error.message)
+      // Set default zero values on error
+      setStats({
+        totalRevenue: 0,
+        totalEmployees: 0,
+        gasSales: 0,
+        cylinderRefills: 0,
+        totalCustomers: 0,
+        totalCombinedRevenue: 0,
+        pendingCustomers: 0,
+        overdueCustomers: 0,
+        clearedCustomers: 0
+      })
       setLoading(false)
     }
   }
