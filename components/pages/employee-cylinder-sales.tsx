@@ -745,7 +745,7 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
               New Transaction
             </Button>
           </DialogTrigger>
-        <DialogContent className="sm:max-w-[600px] bg-white shadow-2xl rounded-lg">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingTransactionId ? "Edit Cylinder Transaction" : "Create New Cylinder Transaction"}</DialogTitle>
           </DialogHeader>

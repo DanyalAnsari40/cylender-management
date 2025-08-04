@@ -1,5 +1,6 @@
 import dbConnect from "@/lib/mongodb"
 import User from "@/models/User"
+import bcrypt from "bcryptjs"
 import { NextResponse } from "next/server"
 
 export async function PUT(request, { params }) {
@@ -10,6 +11,9 @@ export async function PUT(request, { params }) {
     // Remove password from update if it's empty
     if (!data.password) {
       delete data.password
+    } else {
+      // Hash the password if it's being updated
+      data.password = await bcrypt.hash(data.password, 12)
     }
 
     const employee = await User.findByIdAndUpdate(params.id, data, { new: true }).select("-password")
