@@ -13,6 +13,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { salesAPI, customersAPI, productsAPI } from "@/lib/api"
 import employeeSalesAPI from "@/utils/apis/employeeSalesAPI"
 import { ReceiptDialog } from '@/components/receipt-dialog';
+import { SignatureDialog } from '@/components/signature-dialog';
 import { ProductDropdown } from '@/components/ui/product-dropdown';
 import { Trash2 } from 'lucide-react';
 
@@ -382,6 +383,9 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
     }
   }
 
+const [isSignatureDialogOpen, setIsSignatureDialogOpen] = useState(false);
+const [saleForSignature, setSaleForSignature] = useState<any | null>(null);
+
   const handleViewReceipt = (sale: Sale) => {
     const saleWithAddress = {
       ...sale,
@@ -391,8 +395,20 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
         phone: sale.customer.phone || "N/A",
       },
     };
-    setSaleForReceipt(saleWithAddress);
-    setIsReceiptDialogOpen(true);
+    setSaleForSignature(saleWithAddress);
+    setIsSignatureDialogOpen(true);
+  };
+
+  const handleSignatureComplete = (signature: string) => {
+    if (saleForSignature) {
+      const saleWithSignature = {
+        ...saleForSignature,
+        customerSignature: signature,
+      };
+      setSaleForReceipt(saleWithSignature);
+      setIsSignatureDialogOpen(false);
+      setIsReceiptDialogOpen(true);
+    }
   };
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -822,6 +838,16 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Signature Dialog */}
+      {isSignatureDialogOpen && saleForSignature && (
+        <SignatureDialog
+          isOpen={isSignatureDialogOpen}
+          onClose={() => setIsSignatureDialogOpen(false)}
+          onComplete={handleSignatureComplete}
+          customerName={saleForSignature.customer.name}
+        />
+      )}
 
       {/* Receipt Dialog */}
       {saleForReceipt && (

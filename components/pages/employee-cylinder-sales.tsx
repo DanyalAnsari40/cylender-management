@@ -11,8 +11,10 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Plus, Package, DollarSign, FileText, Edit, Trash2 } from "lucide-react"
+import { Plus, Package, DollarSign, FileText, Edit, Trash2, Receipt } from "lucide-react"
 import { toast } from "sonner"
+import { ReceiptDialog } from '@/components/receipt-dialog'
+import { SignatureDialog } from '@/components/signature-dialog'
 
 interface EmployeeCylinderSalesProps {
   user: { id: string; email: string; name: string }
@@ -77,6 +79,12 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("all")
   const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null)
+
+  // Receipt and signature dialog states
+  const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false)
+  const [isSignatureDialogOpen, setIsSignatureDialogOpen] = useState(false)
+  const [transactionForReceipt, setTransactionForReceipt] = useState<any | null>(null)
+  const [transactionForSignature, setTransactionForSignature] = useState<any | null>(null)
 
   // Customer search state
   const [customerSearch, setCustomerSearch] = useState("")
@@ -447,6 +455,42 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
     }
   }
 
+  // Handle view receipt - opens signature dialog first
+  const handleViewReceipt = (transaction: CylinderTransaction) => {
+    const transactionWithAddress = {
+      ...transaction,
+      invoiceNumber: `CYL-${transaction._id.slice(-6).toUpperCase()}`,
+      category: "cylinder",
+      items: transaction.product ? [{
+        product: transaction.product,
+        quantity: transaction.quantity,
+        price: transaction.amount / transaction.quantity
+      }] : [],
+      totalAmount: transaction.amount,
+      receivedAmount: transaction.amount,
+      customer: {
+        ...transaction.customer,
+        address: transaction.customer.address || "N/A",
+        phone: transaction.customer.phone || "N/A",
+      },
+    };
+    setTransactionForSignature(transactionWithAddress);
+    setIsSignatureDialogOpen(true);
+  };
+
+  // Handle signature completion - opens receipt dialog
+  const handleSignatureComplete = (signature: string) => {
+    if (transactionForSignature) {
+      const transactionWithSignature = {
+        ...transactionForSignature,
+        customerSignature: signature,
+      };
+      setTransactionForReceipt(transactionWithSignature);
+      setIsSignatureDialogOpen(false);
+      setIsReceiptDialogOpen(true);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "cleared":
@@ -639,9 +683,19 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
             <Button
               variant="outline"
               size="sm"
+              onClick={() => handleViewReceipt(transaction)}
+              className="h-8 px-2 text-xs"
+            >
+              <Receipt className="w-3 h-3 mr-1" />
+              Receipt
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => handleEdit(transaction)}
               className="h-8 px-2 text-xs"
             >
+              <Edit className="w-3 h-3 mr-1" />
               Edit
             </Button>
             <Button
@@ -650,6 +704,7 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
               onClick={() => handleDelete(transaction._id)}
               className="h-8 px-2 text-xs text-red-600 hover:text-red-700"
             >
+              <Trash2 className="w-3 h-3 mr-1" />
               Delete
             </Button>
           </div>
@@ -974,6 +1029,27 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
         </Tabs>
       </CardContent>
     </Card>
+
+    {/* Signature Dialog */}
+    {isSignatureDialogOpen && transactionForSignature && (
+      <SignatureDialog
+        isOpen={isSignatureDialogOpen}
+        onClose={() => setIsSignatureDialogOpen(false)}
+        onComplete={handleSignatureComplete}
+        customerName={transactionForSignature.customer.name}
+      />
+    )}
+
+    {/* Receipt Dialog */}
+    {transactionForReceipt && (
+      <ReceiptDialog
+        onClose={() => {
+          setIsReceiptDialogOpen(false);
+          setTransactionForReceipt(null);
+        }}
+        sale={transactionForReceipt}
+      />
+    )}
     </div>
   )
 }
