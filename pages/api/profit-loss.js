@@ -1,5 +1,3 @@
-
-
 import Sale from "../../models/Sale"
 import EmployeeSale from "../../models/EmployeeSale"
 import Cylinder from "../../models/Cylinder"
