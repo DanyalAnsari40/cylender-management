@@ -75,6 +75,11 @@ export function GasSales() {
   const [sales, setSales] = useState<Sale[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [products, setProducts] = useState<Product[]>([])
+  const [priceAlert, setPriceAlert] = useState<{ message: string; index: number | null }>({ message: '', index: null });
+  
+  // Stock insufficient popup state
+  const [showStockInsufficientPopup, setShowStockInsufficientPopup] = useState(false)
+  const [stockErrorMessage, setStockErrorMessage] = useState("")
   const [allProducts, setAllProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -106,18 +111,9 @@ export function GasSales() {
     notes: "",
   })
 
-  // Price validation popup state
-  const [showPriceValidationPopup, setShowPriceValidationPopup] = useState(false)
-  const [validationMessage, setValidationMessage] = useState("")
-  
-  // Stock insufficient popup state
-  const [showStockInsufficientPopup, setShowStockInsufficientPopup] = useState(false)
-  const [stockErrorMessage, setStockErrorMessage] = useState("")
-
   useEffect(() => {
     fetchData()
   }, [])
-
 
   const fetchData = async () => {
     try {
@@ -332,22 +328,27 @@ export function GasSales() {
   }
 
   const updateItem = (index: number, field: string, value: any) => {
-    console.log('updateItem called:', { index, field, value })
-    console.log('Current formData.items:', formData.items)
-    console.log('Current item before update:', formData.items[index])
-    
-    const updatedItems = [...formData.items]
-    // Ensure we preserve all existing fields when updating
-    updatedItems[index] = { 
-      ...updatedItems[index], 
-      [field]: value 
-    }
-    console.log('Updated item after change:', updatedItems[index])
+    const newItems = [...formData.items];
 
-    const newFormData = { ...formData, items: updatedItems }
-    console.log('New form data:', newFormData)
-    setFormData(newFormData)
-  }
+    // If productId is changed, handle the update atomically
+    if (field === 'productId') {
+      const product = products.find((p: Product) => p._id === value);
+      newItems[index] = {
+        ...newItems[index],
+        productId: value,
+        quantity: '1', // Reset quantity to a string '1'
+        price: product ? product.leastPrice.toString() : '', // Set price
+      };
+    } else {
+      // For other fields, update as usual
+      newItems[index] = {
+        ...newItems[index],
+        [field]: value, // Value from input is already a string
+      };
+    }
+
+    setFormData({ ...formData, items: newItems });
+  };
 
   // Handle receipt button click - show signature dialog only if no signature exists
   const handleReceiptClick = (sale: Sale) => {
@@ -718,28 +719,33 @@ export function GasSales() {
 
                       <div className="space-y-2">
                         <Label>Price (AED) - Editable</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={item.price}
-                          onChange={(e) => {
-                            const product = products.find((p: Product) => p._id === item.productId)
-                            const enteredPrice = parseFloat(e.target.value)
-                            
-                            if (product && enteredPrice < product.leastPrice) {
-                              setValidationMessage(`Enter Greater than or equal to Least Price (AED ${product.leastPrice.toFixed(2)})`)
-                              setShowPriceValidationPopup(true)
-                              return
-                            }
-                            
-                            updateItem(index, "price", e.target.value)
-                          }}
-                          placeholder={(() => {
-                            const product = products.find((p: Product) => p._id === item.productId)
-                            return product?.leastPrice ? `Min: AED ${product.leastPrice.toFixed(2)}` : 'Select product first'
-                          })()}
-                        />
+                        <div className="relative">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={item.price}
+                            onChange={(e) => {
+                              const product = products.find((p: Product) => p._id === item.productId);
+                              const enteredPrice = parseFloat(e.target.value);
+                              if (product && enteredPrice < product.leastPrice) {
+                                setPriceAlert({ message: `Price must be at least ${product.leastPrice.toFixed(2)}`, index });
+                                setTimeout(() => setPriceAlert({ message: '', index: null }), 2000);
+                              }
+                              updateItem(index, 'price', e.target.value);
+                            }}
+                            placeholder={(() => {
+                              const product = products.find((p: Product) => p._id === item.productId);
+                              return product?.leastPrice ? `Min: AED ${product.leastPrice.toFixed(2)}` : 'Select product first';
+                            })()}
+                            className="w-full h-10 sm:h-11 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 rounded-md shadow-sm"
+                          />
+                          {priceAlert.index === index && priceAlert.message && (
+                            <div className="absolute top-full mt-1 text-xs text-red-500 bg-white dark:bg-gray-800 p-1 rounded shadow-lg z-10">
+                              {priceAlert.message}
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       <div className="space-y-2">
@@ -993,50 +999,7 @@ export function GasSales() {
         />
       )}
 
-      {/* Modern Price Validation Popup */}
-      {showPriceValidationPopup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          {/* Background blur overlay */}
-          <div 
-            className="absolute inset-0 bg-black/20 backdrop-blur-sm" 
-            onClick={() => setShowPriceValidationPopup(false)}
-          />
-          
-          {/* Modal with animations */}
-          <div className="relative bg-white rounded-2xl shadow-2xl p-8 mx-4 max-w-md w-full transform transition-all duration-300 scale-100 animate-in fade-in-0 zoom-in-95">
-            {/* Close button */}
-            <button
-              onClick={() => setShowPriceValidationPopup(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-            
-            {/* Icon */}
-            <div className="flex items-center justify-center w-16 h-16 mx-auto mb-4 bg-gradient-to-r from-red-500 to-red-600 rounded-full">
-              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-              </svg>
-            </div>
-            
-            {/* Content */}
-            <div className="text-center">
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Price Validation Error</h3>
-              <p className="text-gray-600 mb-6">{validationMessage}</p>
-              
-              {/* Action button */}
-              <button
-                onClick={() => setShowPriceValidationPopup(false)}
-                className="w-full bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold py-3 px-6 rounded-lg hover:from-red-600 hover:to-red-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl"
-              >
-                Got It
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {/* Modern Stock Insufficient Popup */}
       {showStockInsufficientPopup && (
