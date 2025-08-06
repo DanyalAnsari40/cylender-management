@@ -103,8 +103,8 @@ export function GasSales() {
   // Form state
   const [formData, setFormData] = useState({
     customerId: "",
-    category: "gas", // New category field
-    items: [{ productId: "", quantity: "", price: "" }], // Added price field
+    category: "gas", 
+    items: [{ productId: "", quantity: "1", price: "", category: "gas" }], 
     paymentMethod: "cash",
     paymentStatus: "cleared",
     receivedAmount: "",
@@ -207,13 +207,14 @@ export function GasSales() {
         .map((item) => {
           const product = (products || []).find((p) => p._id === item.productId)
           const quantity = Number(item.quantity) || 1
-          // Use costPrice from product instead of manual price input
-          const price = Number(product?.costPrice) || 0
+          // Use the user-entered price from the form
+          const price = Number(item.price) || 0
           return {
             product: item.productId,
             quantity: quantity,
             price: price,
             total: price * quantity,
+            category: item.category,
           }
         })
 
@@ -268,7 +269,7 @@ export function GasSales() {
     setFormData({
       customerId: "",
       category: "gas",
-      items: [{ productId: "", quantity: "", price: "" }],
+      items: [{ productId: "", quantity: "1", price: "", category: "gas" }],
       paymentMethod: "cash",
       paymentStatus: "cleared",
       receivedAmount: "",
@@ -289,6 +290,7 @@ export function GasSales() {
         productId: item.product?._id || "",
         quantity: item.quantity.toString(),
         price: item.price?.toString() || "",
+        category: (item as any).category || (item.product as any)?.category || "gas", // Fallback to product category or default to gas
       })),
       paymentMethod: sale.paymentMethod || "cash",
       paymentStatus: sale.paymentStatus || "cleared",
@@ -316,7 +318,7 @@ export function GasSales() {
   const addItem = () => {
     setFormData({
       ...formData,
-      items: [...formData.items, { productId: "", quantity: "", price: "" }],
+      items: [...formData.items, { productId: "", quantity: "1", price: "", category: "gas" }],
     })
   }
 
@@ -330,9 +332,21 @@ export function GasSales() {
   const updateItem = (index: number, field: string, value: any) => {
     const newItems = [...formData.items];
 
+    // If category is changed, reset productId and price
+    if (field === 'category') {
+      newItems[index] = {
+        ...newItems[index],
+        category: value,
+        productId: '', // Reset product selection
+        price: '', // Reset price
+      };
+    }
     // If productId is changed, handle the update atomically
-    if (field === 'productId') {
-      const product = products.find((p: Product) => p._id === value);
+    else if (field === 'productId') {
+      // Find product from the item's specific category
+      const itemCategory = newItems[index].category || 'gas';
+      const categoryProducts = allProducts.filter((p: Product) => p.category === itemCategory);
+      const product = categoryProducts.find((p: Product) => p._id === value);
       newItems[index] = {
         ...newItems[index],
         productId: value,
@@ -656,14 +670,32 @@ export function GasSales() {
 
                 <div className="space-y-3">
                   {formData.items.map((item, index) => (
-                    <div key={index} className="grid grid-cols-1 md:grid-cols-4 gap-3 p-4 border rounded-lg">
+                    <div key={index} className="grid grid-cols-1 md:grid-cols-5 gap-3 p-4 border rounded-lg">
+                      <div className="space-y-2">
+                        <Label>Category</Label>
+                        <Select
+                          value={item.category || 'gas'}
+                          onValueChange={(value) => updateItem(index, 'category', value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="gas">Gas</SelectItem>
+                            <SelectItem value="cylinder">Cylinder</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
                       <div className="space-y-2">
                         <Label>Product</Label>
                         <ProductDropdown
                           selectedProductId={item.productId}
                           onSelect={(productId) => {
                             console.log('Product selected:', productId)
-                            const product = products.find((p: Product) => p._id === productId)
+                            const itemCategory = item.category || 'gas'
+                            const categoryProducts = allProducts.filter((p: Product) => p.category === itemCategory)
+                            const product = categoryProducts.find((p: Product) => p._id === productId)
                             console.log('Found product:', product)
                             
                             // Update both productId and price in a single atomic operation
@@ -683,9 +715,9 @@ export function GasSales() {
                               console.log('Auto-filled price:', product.leastPrice)
                             }
                           }}
-                          categoryFilter={formData.category}
-                          placeholder={`Select ${formData.category} product`}
-                          products={products}
+                          categoryFilter={item.category || 'gas'}
+                          placeholder={`Select ${item.category || 'gas'} product`}
+                          products={allProducts.filter((p: Product) => p.category === (item.category || 'gas'))}
                         />
                       </div>
 
@@ -905,7 +937,15 @@ export function GasSales() {
                       <div className="space-y-1">
                         {sale.items.map((item, index) => (
                           <div key={index} className="text-sm">
-                            {item.product?.name || "Unknown Product"} x{item.quantity}
+                            <div className="flex items-center gap-2">
+                              <span>{item.product?.name || "Unknown Product"} x{item.quantity}</span>
+                              {(item as any).category && (
+                                <Badge variant="outline" className="text-xs">
+                                  {(item as any).category}
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-xs text-gray-500">AED {((item as any).price || 0).toFixed(2)} each</div>
                           </div>
                         ))}
                       </div>
