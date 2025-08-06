@@ -580,31 +580,7 @@ export function GasSales() {
               <DialogTitle>{editingSale ? "Edit Sale" : "Create New Sale"}</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="category">Category *</Label>
-                  <Select
-                    value={formData.category}
-                    onValueChange={(value) => {
-                      console.log('Category changed to:', value)
-                      console.log('All products:', allProducts)
-                      setFormData({ ...formData, category: value })
-                      // Filter products based on selected category
-                      const filteredProducts = allProducts.filter((product: Product) => product.category === value)
-                      console.log('Filtered products for category', value, ':', filteredProducts)
-                      setProducts(filteredProducts)
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="gas">Gas</SelectItem>
-                      <SelectItem value="cylinder">Cylinder</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2 relative">
                   <Label htmlFor="customer">Customer *</Label>
                   <Input
@@ -937,13 +913,18 @@ export function GasSales() {
                       <div className="space-y-1">
                         {sale.items.map((item, index) => (
                           <div key={index} className="text-sm">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span>{item.product?.name || "Unknown Product"} x{item.quantity}</span>
-                              {(item as any).category && (
-                                <Badge variant="outline" className="text-xs">
-                                  {(item as any).category}
-                                </Badge>
-                              )}
+                              <Badge 
+                                variant="outline" 
+                                className={`text-xs font-medium ${
+                                  ((item as any).category || (item.product as any)?.category) === 'gas' 
+                                    ? 'bg-blue-50 text-blue-700 border-blue-200' 
+                                    : 'bg-green-50 text-green-700 border-green-200'
+                                }`}
+                              >
+                                {(item as any).category || (item.product as any)?.category || 'gas'}
+                              </Badge>
                             </div>
                             <div className="text-xs text-gray-500">AED {((item as any).price || 0).toFixed(2)} each</div>
                           </div>
