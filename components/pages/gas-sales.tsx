@@ -665,9 +665,9 @@ export function GasSales() {
 
                       <div className="space-y-2">
                         <Label>Product</Label>
-                        <ProductDropdown
-                          selectedProductId={item.productId}
-                          onSelect={(productId) => {
+                        <Select
+                          value={item.productId}
+                          onValueChange={(productId) => {
                             console.log('Product selected:', productId)
                             const itemCategory = item.category || 'gas'
                             const categoryProducts = allProducts.filter((p: Product) => p.category === itemCategory)
@@ -691,10 +691,20 @@ export function GasSales() {
                               console.log('Auto-filled price:', product.leastPrice)
                             }
                           }}
-                          categoryFilter={item.category || 'gas'}
-                          placeholder={`Select ${item.category || 'gas'} product`}
-                          products={allProducts.filter((p: Product) => p.category === (item.category || 'gas'))}
-                        />
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={`Select ${item.category || 'gas'} product`} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {allProducts
+                              .filter((p: Product) => p.category === (item.category || 'gas'))
+                              .map((product) => (
+                                <SelectItem key={product._id} value={product._id}>
+                                  {product.name}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
                       </div>
 
                       <div className="space-y-2">
@@ -734,7 +744,7 @@ export function GasSales() {
                             min="0"
                             value={item.price}
                             onChange={(e) => {
-                              const product = products.find((p: Product) => p._id === item.productId);
+                              const product = allProducts.find((p: Product) => p._id === item.productId);
                               const enteredPrice = parseFloat(e.target.value);
                               if (product && enteredPrice < product.leastPrice) {
                                 setPriceAlert({ message: `Price must be at least ${product.leastPrice.toFixed(2)}`, index });
@@ -743,7 +753,7 @@ export function GasSales() {
                               updateItem(index, 'price', e.target.value);
                             }}
                             placeholder={(() => {
-                              const product = products.find((p: Product) => p._id === item.productId);
+                              const product = allProducts.find((p: Product) => p._id === item.productId);
                               return product?.leastPrice ? `Min: AED ${product.leastPrice.toFixed(2)}` : 'Select product first';
                             })()}
                             className="w-full h-10 sm:h-11 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 rounded-md shadow-sm"
