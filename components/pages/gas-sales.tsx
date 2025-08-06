@@ -505,7 +505,7 @@ export function GasSales() {
       </div>
 
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-        <div className="flex flex-col sm:flex-row gap-4 flex-1">
+        <div className="flex flex-row gap-4 flex-1">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <Input
@@ -541,7 +541,7 @@ export function GasSales() {
             )}
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full sm:w-48">
+            <SelectTrigger className="w-[150px]">
               <Filter className="w-4 h-4 mr-2" />
               <SelectValue />
             </SelectTrigger>
