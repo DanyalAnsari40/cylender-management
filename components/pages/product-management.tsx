@@ -28,6 +28,9 @@ export function ProductManagement() {
   const [submitting, setSubmitting] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const [formData, setFormData] = useState({
     name: "",
     category: "gas" as "gas" | "cylinder",
@@ -106,14 +109,22 @@ export function ProductManagement() {
   }
 
   const handleDelete = async (id: string) => {
-    if (confirm("Are you sure you want to delete this product?")) {
-      try {
-        await productsAPI.delete(id)
-        await fetchProducts()
-      } catch (error: any) {
-        alert(error.response?.data?.error || "Failed to delete product")
-      }
+    setDeleting(true)
+    try {
+      await productsAPI.delete(id)
+      await fetchProducts()
+      setProductToDelete(null)
+      setDeleteDialogOpen(false)
+    } catch (error: any) {
+      alert(error.response?.data?.error || "Failed to delete product")
+    } finally {
+      setDeleting(false)
     }
+  }
+
+  const openDeleteDialog = (product: Product) => {
+    setProductToDelete(product)
+    setDeleteDialogOpen(true)
   }
 
   if (loading) {
@@ -308,7 +319,7 @@ export function ProductManagement() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleDelete(product._id)}
+                          onClick={() => openDeleteDialog(product)}
                           className="text-red-600 hover:text-red-700 min-h-[36px]"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -379,7 +390,7 @@ export function ProductManagement() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleDelete(product._id)}
+                          onClick={() => openDeleteDialog(product)}
                           className="w-full sm:w-auto border-red-500 text-red-500 hover:bg-red-500 hover:text-white transition-colors min-h-[44px]"
                         >
                           <Trash2 className="w-4 h-4 mr-2" />
@@ -402,6 +413,52 @@ export function ProductManagement() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-[#2B3068]">
+              <Trash2 className="w-5 h-5 text-red-600" />
+              Delete Product
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-gray-700">
+              Are you sure you want to delete{' '}
+              <span className="font-semibold">{productToDelete?.name || 'this product'}</span>?
+              {' '}This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setDeleteDialogOpen(false)
+                  setProductToDelete(null)
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                className="bg-red-600 hover:bg-red-700 text-white"
+                onClick={() => productToDelete && handleDelete(productToDelete._id)}
+                disabled={deleting}
+              >
+                {deleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>Delete</>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

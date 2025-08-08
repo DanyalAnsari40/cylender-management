@@ -182,27 +182,6 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-lg">
-          <CardHeader className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] text-white rounded-t-lg p-4 sm:p-6">
-            <CardTitle className="text-base sm:text-lg">Quick Actions</CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 sm:p-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <button className="p-3 sm:p-4 text-left rounded-lg border border-gray-200 hover:bg-[#2B3068] hover:text-white transition-all duration-200 text-sm font-medium min-h-[44px] flex items-center">
-                Add New Product
-              </button>
-              <button className="p-3 sm:p-4 text-left rounded-lg border border-gray-200 hover:bg-[#2B3068] hover:text-white transition-all duration-200 text-sm font-medium min-h-[44px] flex items-center">
-                Create Sale
-              </button>
-              <button className="p-3 sm:p-4 text-left rounded-lg border border-gray-200 hover:bg-[#2B3068] hover:text-white transition-all duration-200 text-sm font-medium min-h-[44px] flex items-center">
-                Add Customer
-              </button>
-              <button className="p-3 sm:p-4 text-left rounded-lg border border-gray-200 hover:bg-[#2B3068] hover:text-white transition-all duration-200 text-sm font-medium min-h-[44px] flex items-center">
-                View Reports
-              </button>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </div>
   )
