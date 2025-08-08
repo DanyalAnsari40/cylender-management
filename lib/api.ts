@@ -90,10 +90,7 @@ export const notificationsAPI = {
   delete: (id: string) => api.delete(`/notifications/${id}`),
 }
 
-// Dashboard API
-export const dashboardAPI = {
-  getStats: () => api.get("/dashboard/stats"),
-}
+
 
 // Purchase Orders API
 export const purchaseOrdersAPI = {
@@ -134,6 +131,11 @@ export const cylindersAPI = {
   deposit: (data: any) => api.post("/cylinders/deposit", data),
   refill: (data: any) => api.post("/cylinders/refill", data),
   return: (data: any) => api.post("/cylinders/return", data),
+}
+
+// Dashboard API
+export const dashboardAPI = {
+  getStats: () => api.get("/dashboard/stats"),
 }
 
 // Reports API
