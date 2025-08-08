@@ -83,22 +83,17 @@ export function Inventory() {
             : []
 
       // Build quick-lookup maps by ID
-      // Build maps with both _id and id keys for robustness
-      const productsMap = new Map<string, any>()
-      ;(productsData as any[]).filter(Boolean).forEach((p: any) => {
-        if (p._id) productsMap.set(p._id, p)
-        if (p.id) productsMap.set(p.id, p)
-      })
-      const suppliersMap = new Map<string, any>()
-      ;(suppliersData as any[]).filter(Boolean).forEach((s: any) => {
-        if (s._id) suppliersMap.set(s._id, s)
-        if (s.id) suppliersMap.set(s.id, s)
-      })
+      const productsMap = new Map<string, any>(
+        (productsData as any[]).filter(Boolean).map((p: any) => [p._id, p])
+      )
+      const suppliersMap = new Map<string, any>(
+        (suppliersData as any[]).filter(Boolean).map((s: any) => [s._id, s])
+      )
 
       const inventoryItems = Array.isArray(purchaseOrdersData)
         ? purchaseOrdersData.map((order: any, idx: number) => {
-            const productRef = order.product ?? order.productId ?? order.productID
-            const supplierRef = order.supplier ?? order.supplierId ?? order.supplierID ?? order.vendor
+            const productRef = order.product ?? order.productId
+            const supplierRef = order.supplier ?? order.supplierId ?? order.vendor
 
             // Resolve product name from populated object, ID lookup, or fallback fields
             let resolvedProductName = 'Unknown Product'
