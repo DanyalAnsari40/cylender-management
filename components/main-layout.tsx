@@ -162,7 +162,19 @@ export function MainLayout({ user, onLogout }: MainLayoutProps) {
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full bg-gray-50">
-        <AppSidebar currentPage={currentPage} onPageChange={setCurrentPage} user={user} onLogout={handleLogoutClick} unreadCount={unreadCount} setUnreadCount={setUnreadCount} creditAmount={creditAmount} debitAmount={debitAmount} />
+        {/* Hide sidebar on mobile while logout dialog is open for a clear view */}
+        <div className={showLogoutConfirmation ? "hidden lg:block" : undefined}>
+          <AppSidebar 
+            currentPage={currentPage} 
+            onPageChange={setCurrentPage} 
+            user={user} 
+            onLogout={handleLogoutClick} 
+            unreadCount={unreadCount} 
+            setUnreadCount={setUnreadCount} 
+            creditAmount={creditAmount} 
+            debitAmount={debitAmount} 
+          />
+        </div>
         <main className="flex-1 overflow-auto">
           <div className="pt-16 lg:pt-0 p-3 sm:p-4 lg:p-6 xl:p-8">{renderPage()}</div>
         </main>
