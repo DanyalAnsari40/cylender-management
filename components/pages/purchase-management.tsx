@@ -47,11 +47,9 @@ export function PurchaseManagement() {
   const [error, setError] = useState<string>("")
   const [formData, setFormData] = useState(() => ({
     supplierId: "",
-    productId: "",
     purchaseDate: new Date().toISOString().split("T")[0],
     purchaseType: "gas" as "gas" | "cylinder",
-    quantity: "",
-    unitPrice: "",
+    items: [{ productId: "", quantity: "", unitPrice: "" }],
     notes: "",
   }))
 
@@ -136,48 +134,63 @@ export function PurchaseManagement() {
     setError("")
 
     try {
-      if (!formData.supplierId || !formData.productId || !formData.quantity || !formData.unitPrice) {
-        throw new Error("Please fill in all required fields")
+      const selectedSupplier = suppliers.find((s) => s._id === formData.supplierId)
+      
+      if (!selectedSupplier) {
+        setError("Please select a valid supplier")
+        return
       }
 
-      const quantity = Number.parseInt(formData.quantity)
-      const unitPrice = Number.parseFloat(formData.unitPrice)
-
-      if (isNaN(quantity) || isNaN(unitPrice) || quantity <= 0 || unitPrice <= 0) {
-        throw new Error("Please enter valid positive numbers for quantity and unit price")
+      // Validate all items
+      for (const item of formData.items) {
+        const selectedProduct = products.find((p) => p._id === item.productId)
+        if (!selectedProduct) {
+          setError("Please select valid products for all items")
+          return
+        }
+        if (!item.quantity || !item.unitPrice) {
+          setError("Please fill in quantity and unit price for all items")
+          return
+        }
       }
 
-      const totalAmount = quantity * unitPrice
-
-      const orderData = {
-        supplier: formData.supplierId,
-        product: formData.productId,
-        purchaseDate: formData.purchaseDate,
-        purchaseType: formData.purchaseType,
-        quantity,
-        unitPrice,
-        totalAmount,
-        notes: formData.notes,
-        status: "pending" as const,
-      }
-
-      let response
+      // For editing existing orders (single item), handle as before
       if (editingOrder) {
-        response = await purchaseOrdersAPI.update(editingOrder._id, orderData)
+        const item = formData.items[0]
+        const purchaseData = {
+          supplier: formData.supplierId,
+          product: item.productId,
+          purchaseDate: formData.purchaseDate,
+          purchaseType: formData.purchaseType,
+          quantity: Number.parseInt(item.quantity),
+          unitPrice: Number.parseFloat(item.unitPrice),
+          totalAmount: Number.parseInt(item.quantity) * Number.parseFloat(item.unitPrice),
+          notes: formData.notes,
+        }
+        await purchaseOrdersAPI.update(editingOrder._id, purchaseData)
       } else {
-        response = await purchaseOrdersAPI.create(orderData)
-        
-        // Stock will be updated when item is received in inventory management
-        // No longer updating stock immediately upon purchase order creation
+        // For new orders, create multiple purchase orders (one per item)
+        for (const item of formData.items) {
+          const purchaseData = {
+            supplier: formData.supplierId,
+            product: item.productId,
+            purchaseDate: formData.purchaseDate,
+            purchaseType: formData.purchaseType,
+            quantity: Number.parseInt(item.quantity),
+            unitPrice: Number.parseFloat(item.unitPrice),
+            totalAmount: Number.parseInt(item.quantity) * Number.parseFloat(item.unitPrice),
+            notes: formData.notes,
+          }
+          await purchaseOrdersAPI.create(purchaseData)
+        }
       }
 
-      // Refresh the data to get the latest from database
       await fetchData()
       resetForm()
       setIsDialogOpen(false)
     } catch (error: any) {
-      console.error("Purchase order error:", error)
-      setError(error.message || "Failed to save purchase order")
+      console.error("Failed to save purchase order:", error)
+      setError(error.response?.data?.error || "Failed to save purchase order")
     } finally {
       setSubmitting(false)
     }
@@ -186,11 +199,9 @@ export function PurchaseManagement() {
   const resetForm = () => {
     setFormData({
       supplierId: "",
-      productId: "",
       purchaseDate: new Date().toISOString().split("T")[0],
-      purchaseType: "gas",
-      quantity: "",
-      unitPrice: "",
+      purchaseType: "gas" as "gas" | "cylinder",
+      items: [{ productId: "", quantity: "", unitPrice: "" }],
       notes: "",
     })
     setEditingOrder(null)
@@ -200,12 +211,14 @@ export function PurchaseManagement() {
   const handleEdit = (order: PurchaseOrder) => {
     setEditingOrder(order)
     setFormData({
-      supplierId: order.supplier?._id || "",
-      productId: order.product?._id || "",
-      purchaseDate: order.purchaseDate ? order.purchaseDate.split("T")[0] : new Date().toISOString().split("T")[0],
-      purchaseType: order.purchaseType || "gas",
-      quantity: order.quantity?.toString() || "",
-      unitPrice: order.unitPrice?.toString() || "",
+      supplierId: order.supplier._id,
+      purchaseDate: order.purchaseDate.split("T")[0],
+      purchaseType: order.purchaseType,
+      items: [{
+        productId: order.product._id,
+        quantity: order.quantity.toString(),
+        unitPrice: order.unitPrice.toString()
+      }],
       notes: order.notes || "",
     })
     setIsDialogOpen(true)
@@ -214,62 +227,46 @@ export function PurchaseManagement() {
   const handleDelete = async (id: string) => {
     if (confirm("Are you sure you want to delete this purchase order?")) {
       try {
-        // Find the purchase order to get its details before deletion
-        const orderToDelete = purchaseOrders.find(order => order._id === id)
-        
-        if (orderToDelete) {
-          console.log("🗑️ Deleting purchase order:", orderToDelete.poNumber)
-          console.log("Order quantity to remove from stock:", orderToDelete.quantity)
-          console.log("Product ID:", orderToDelete.product?._id)
-          
-          // Delete the purchase order first
-          await purchaseOrdersAPI.delete(id)
-          
-          // Update product stock by removing the deleted order's quantity
-          try {
-            if (orderToDelete.product?._id && orderToDelete.quantity) {
-              // Get the latest product data from database
-              const latestProductsResponse = await productsAPI.getAll()
-              const latestProducts = latestProductsResponse.data
-              const latestProduct = latestProducts.find((p: Product) => p._id === orderToDelete.product._id)
-              
-              if (latestProduct) {
-                const currentStock = latestProduct.currentStock || 0
-                const updatedStock = Math.max(0, currentStock - orderToDelete.quantity) // Prevent negative stock
-                
-                console.log(`📊 Stock reduction: ${currentStock} - ${orderToDelete.quantity} = ${updatedStock}`)
-                
-                await productsAPI.update(orderToDelete.product._id, {
-                  ...latestProduct,
-                  currentStock: updatedStock
-                })
-                
-                console.log(`✅ Reduced ${latestProduct.name} stock from ${currentStock} to ${updatedStock}`)
-              } else {
-                console.error("Product not found in latest database fetch")
-              }
-            }
-          } catch (stockError: any) {
-            console.error("❌ Stock reduction failed:", stockError)
-            // Don't fail the deletion if stock update fails
-          }
-        }
-        
-        // Refresh the data to get the latest from database
+        await purchaseOrdersAPI.delete(id)
         await fetchData()
-      } catch (error: any) {
+      } catch (error) {
         console.error("Failed to delete purchase order:", error)
-        setError("Failed to delete purchase order. Please try again.")
+        alert("Failed to delete purchase order")
       }
     }
   }
 
-  const filteredProducts = products.filter((p) => p.category === formData.purchaseType)
+  const addItem = () => {
+    setFormData({
+      ...formData,
+      items: [...formData.items, { productId: "", quantity: "", unitPrice: "" }],
+    })
+  }
+
+  const removeItem = (index: number) => {
+    setFormData({
+      ...formData,
+      items: formData.items.filter((_, i) => i !== index),
+    })
+  }
+
+  const updateItem = (index: number, field: string, value: any) => {
+    const newItems = [...formData.items]
+    newItems[index] = {
+      ...newItems[index],
+      [field]: value,
+    }
+    setFormData({ ...formData, items: newItems })
+  }
+
+  const filteredProducts = products.filter((p: Product) => p.category === formData.purchaseType)
   
-  // Debug logging for product filtering
-  console.log("All products:", products)
-  console.log("Current purchase type:", formData.purchaseType)
-  console.log("Filtered products:", filteredProducts)
+  // Calculate total amount for all items
+  const totalAmount = formData.items.reduce((sum, item) => {
+    const quantity = Number(item.quantity) || 0
+    const unitPrice = Number(item.unitPrice) || 0
+    return sum + (quantity * unitPrice)
+  }, 0)
 
   if (loading) {
     return (
@@ -385,9 +382,13 @@ export function PurchaseManagement() {
                   </Label>
                   <Select
                     value={formData.purchaseType}
-                    onValueChange={(value: "gas" | "cylinder") =>
-                      setFormData({ ...formData, purchaseType: value, productId: "" })
-                    }
+                    onValueChange={(value: "gas" | "cylinder") => {
+                      setFormData({ 
+                        ...formData, 
+                        purchaseType: value,
+                        items: [{ productId: "", quantity: "", unitPrice: "" }] // Reset items when type changes
+                      })
+                    }}
                   >
                     <SelectTrigger className="h-10 sm:h-12 border-2 border-gray-200 rounded-lg sm:rounded-xl focus:border-[#2B3068] transition-colors">
                       <SelectValue placeholder="Select type" />
@@ -399,68 +400,106 @@ export function PurchaseManagement() {
                   </Select>
                 </div>
 
-                <div className="space-y-2 sm:space-y-3">
-                  <Label htmlFor="product" className="text-sm font-semibold text-gray-700">
-                    Product Name *
-                  </Label>
-                  <Select
-                    value={formData.productId}
-                    onValueChange={(value) => setFormData({ ...formData, productId: value })}
-                  >
-                    <SelectTrigger className="h-10 sm:h-12 border-2 border-gray-200 rounded-lg sm:rounded-xl focus:border-[#2B3068] transition-colors">
-                      <SelectValue placeholder="Select product" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {filteredProducts.map((product) => (
-                        <SelectItem key={product._id} value={product._id}>
-                          {product.name} - AED {product.costPrice}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                  <div className="space-y-2 sm:space-y-3">
-                    <Label htmlFor="quantity" className="text-sm font-semibold text-gray-700">
-                      Quantity *
-                    </Label>
-                    <Input
-                      id="quantity"
-                      type="number"
-                      min="1"
-                      placeholder="Enter quantity"
-                      value={formData.quantity}
-                      onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
-                      className="h-10 sm:h-12 border-2 border-gray-200 rounded-lg sm:rounded-xl focus:border-[#2B3068] transition-colors"
-                      required
-                    />
+                {/* Items Section */}
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <Label className="text-sm font-semibold text-gray-700">Items *</Label>
+                    <Button
+                      type="button"
+                      onClick={addItem}
+                      variant="outline"
+                      size="sm"
+                      className="text-[#2B3068] border-[#2B3068] hover:bg-[#2B3068] hover:text-white"
+                    >
+                      <Plus className="w-4 h-4 mr-1" />
+                      Add Item
+                    </Button>
                   </div>
 
-                  <div className="space-y-2 sm:space-y-3">
-                    <Label htmlFor="unitPrice" className="text-sm font-semibold text-gray-700">
-                      Unit Price (AED) *
-                    </Label>
-                    <Input
-                      id="unitPrice"
-                      type="number"
-                      step="0.01"
-                      min="0.01"
-                      placeholder="Enter unit price"
-                      value={formData.unitPrice}
-                      onChange={(e) => setFormData({ ...formData, unitPrice: e.target.value })}
-                      className="h-10 sm:h-12 border-2 border-gray-200 rounded-lg sm:rounded-xl focus:border-[#2B3068] transition-colors"
-                      required
-                    />
-                  </div>
+                  {formData.items.map((item, index) => (
+                    <div key={index} className="border border-gray-200 rounded-lg p-4 space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="space-y-2">
+                          <Label>Product *</Label>
+                          <Select
+                            value={item.productId}
+                            onValueChange={(value) => updateItem(index, "productId", value)}
+                          >
+                            <SelectTrigger className="h-10">
+                              <SelectValue placeholder="Select product" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {filteredProducts.map((product) => (
+                                <SelectItem key={product._id} value={product._id}>
+                                  {product.name} - AED {product.costPrice}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Quantity *</Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) => updateItem(index, "quantity", e.target.value)}
+                            placeholder="Enter quantity"
+                            className="h-10"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Unit Price (AED) *</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0.01"
+                            value={item.unitPrice}
+                            onChange={(e) => updateItem(index, "unitPrice", e.target.value)}
+                            placeholder="Enter unit price"
+                            className="h-10"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Total (AED)</Label>
+                          <div className="flex items-center gap-2">
+                            <Input 
+                              value={(() => {
+                                const quantity = Number(item.quantity) || 0
+                                const unitPrice = Number(item.unitPrice) || 0
+                                return `AED ${(quantity * unitPrice).toFixed(2)}`
+                              })()} 
+                              disabled 
+                              className="h-10"
+                            />
+                            {formData.items.length > 1 && (
+                              <Button
+                                type="button"
+                                onClick={() => removeItem(index)}
+                                variant="outline"
+                                size="sm"
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
-                {formData.quantity && formData.unitPrice && (
+                {/* Total Amount Display */}
+                {totalAmount > 0 && (
                   <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 sm:p-4 rounded-lg sm:rounded-xl border border-blue-200">
                     <div className="flex justify-between items-center">
                       <span className="text-sm sm:text-lg font-semibold text-gray-700">Total Amount:</span>
                       <span className="text-lg sm:text-2xl font-bold text-[#2B3068]">
-                        AED {(Number.parseFloat(formData.quantity) * Number.parseFloat(formData.unitPrice)).toFixed(2)}
+                        AED {totalAmount.toFixed(2)}
                       </span>
                     </div>
                   </div>
