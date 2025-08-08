@@ -21,6 +21,7 @@ import { Notifications } from "@/components/pages/notifications"
 import { NotificationPopup } from "@/components/notification-popup"
 import { LogoutConfirmation } from "@/components/logout-confirmation"
 import { authAPI } from "@/lib/api"
+import { AdminSignatureDialog } from "@/components/admin-signature-dialog"
 
 interface MainLayoutProps {
   user: {
@@ -41,6 +42,7 @@ export function MainLayout({ user, onLogout }: MainLayoutProps) {
   const [showLogoutConfirmation, setShowLogoutConfirmation] = useState(false)
   const [creditAmount, setCreditAmount] = useState(0)
   const [debitAmount, setDebitAmount] = useState(0)
+  const [showAdminSignatureDialog, setShowAdminSignatureDialog] = useState(false)
 
   useEffect(() => {
     setMounted(true)
@@ -71,6 +73,24 @@ export function MainLayout({ user, onLogout }: MainLayoutProps) {
 
     fetchEmployeeFinancialData()
   }, [user?.id, user?.role])
+
+  // Prompt admin to capture signature post login if not already saved
+  useEffect(() => {
+    if (!mounted) return
+    if (user?.role === "admin") {
+      try {
+        const sig = typeof window !== 'undefined' ? localStorage.getItem("adminSignature") : null
+        if (!sig) {
+          setShowAdminSignatureDialog(true)
+        }
+      } catch (e) {
+        // If localStorage is unavailable, still prompt
+        setShowAdminSignatureDialog(true)
+      }
+    } else {
+      setShowAdminSignatureDialog(false)
+    }
+  }, [mounted, user?.role])
 
   const handleLogoutClick = () => {
     setShowLogoutConfirmation(true)
@@ -155,6 +175,15 @@ export function MainLayout({ user, onLogout }: MainLayoutProps) {
           onConfirm={handleLogoutConfirm}
           onCancel={handleLogoutCancel}
           userName={user.name}
+        />
+
+        {/* Admin signature capture dialog (post-login, once) */}
+        <AdminSignatureDialog 
+          isOpen={showAdminSignatureDialog}
+          onClose={() => setShowAdminSignatureDialog(false)}
+          onSave={() => {
+            // no-op; saved in component and localStorage
+          }}
         />
       </div>
     </SidebarProvider>

@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
@@ -34,6 +35,17 @@ interface ReceiptDialogProps {
 }
 
 export function ReceiptDialog({ sale, signature, onClose }: ReceiptDialogProps) {
+  const [adminSignature, setAdminSignature] = useState<string | null>(null)
+
+  useEffect(() => {
+    try {
+      const sig = typeof window !== 'undefined' ? localStorage.getItem("adminSignature") : null
+      setAdminSignature(sig)
+    } catch (e) {
+      setAdminSignature(null)
+    }
+  }, [])
+
   // Calculate subtotal from items
   const subtotal = sale.items.reduce((sum, item) => {
     return sum + (item.total || (item.price * item.quantity));
@@ -77,11 +89,15 @@ export function ReceiptDialog({ sale, signature, onClose }: ReceiptDialogProps) 
   const handlePrint = () => {
     // Store the sale data in sessionStorage to pass it to the print page
     sessionStorage.setItem('printReceiptData', JSON.stringify(sale));
+    if (adminSignature) {
+      sessionStorage.setItem('adminSignature', adminSignature)
+    }
     window.open(`/print/receipt/${sale._id}`, '_blank');
   }
 
   const handleDownload = () => {
     const signatureData = signatureToUse || ""
+    const adminSignatureData = adminSignature || ""
 
     // Create a blob with the receipt HTML
     const receiptHTML = `
@@ -252,6 +268,13 @@ export function ReceiptDialog({ sale, signature, onClose }: ReceiptDialogProps) 
                    </div>`
                 : ''
             }
+            ${
+              adminSignatureData
+                ? `<div style="position: absolute; bottom: 10px; left: 30px;">
+                     <img src="${adminSignatureData}" alt="Admin Signature" style="max-height: 50px; object-fit: contain; opacity: 0.9; mix-blend-mode: multiply; filter: drop-shadow(0 0 2px rgba(255,255,255,0.8));" />
+                   </div>`
+                : ''
+            }
           </div>
         </body>
       </html>
@@ -397,12 +420,25 @@ export function ReceiptDialog({ sale, signature, onClose }: ReceiptDialogProps) 
               />
             </div>
             
-            {/* Signature overlaid on Footer - Right Side */}
+            {/* Signatures overlaid on Footer */}
             {signatureToUse && (
               <div className="absolute bottom-4 right-8">
                 <img 
                   src={signatureToUse} 
                   alt="Customer Signature" 
+                  className="max-h-12 object-contain opacity-90"
+                  style={{
+                    mixBlendMode: 'multiply',
+                    filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.8))'
+                  }}
+                />
+              </div>
+            )}
+            {adminSignature && (
+              <div className="absolute bottom-4 left-8">
+                <img 
+                  src={adminSignature} 
+                  alt="Admin Signature" 
                   className="max-h-12 object-contain opacity-90"
                   style={{
                     mixBlendMode: 'multiply',

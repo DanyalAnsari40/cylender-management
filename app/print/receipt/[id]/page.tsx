@@ -32,6 +32,7 @@ interface Sale {
 const ReceiptPrintPage = () => {
   const [sale, setSale] = useState<Sale | null>(null);
   const [loading, setLoading] = useState(true);
+  const [adminSignature, setAdminSignature] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -39,9 +40,11 @@ const ReceiptPrintPage = () => {
     try {
       // Data is passed from the dialog via sessionStorage
       const savedData = sessionStorage.getItem('printReceiptData');
+      const savedAdminSig = sessionStorage.getItem('adminSignature');
       if (savedData) {
         const parsedData = JSON.parse(savedData);
         setSale(parsedData);
+        setAdminSignature(savedAdminSig);
         // We can clear the data after reading it to prevent it from being used again accidentally.
         // sessionStorage.removeItem('printReceiptData');
       } else {
@@ -173,12 +176,22 @@ const ReceiptPrintPage = () => {
             alt="Footer Graphic"
             className="mx-auto max-w-full h-auto"
           />
-          {/* The signature is absolutely positioned on top of the footer image */}
+          {/* The signatures are absolutely positioned on top of the footer image */}
           {sale.customerSignature && (
             <div className="absolute bottom-7 right-16">
               <img 
                 src={sale.customerSignature} 
                 alt="Customer Signature" 
+                className="max-h-12 object-contain opacity-90 mix-blend-multiply"
+                style={{ filter: 'drop-shadow(0 0 1px rgba(255,255,255,0.7))' }}
+              />
+            </div>
+          )}
+          {adminSignature && (
+            <div className="absolute bottom-9 left-16">
+              <img 
+                src={adminSignature} 
+                alt="Admin Signature" 
                 className="max-h-12 object-contain opacity-90 mix-blend-multiply"
                 style={{ filter: 'drop-shadow(0 0 1px rgba(255,255,255,0.7))' }}
               />
