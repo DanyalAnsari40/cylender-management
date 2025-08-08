@@ -52,6 +52,8 @@ export function Inventory() {
     unitPrice: "",
     totalAmount: ""
   })
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<InventoryItem | null>(null)
 
   useEffect(() => {
     fetchInventoryData()
@@ -199,6 +201,29 @@ export function Inventory() {
       totalAmount: item.totalAmount.toString()
     })
     setIsEditDialogOpen(true)
+  }
+
+  const handleDeleteReceived = async (id: string) => {
+    try {
+      setError("")
+      // Delete the underlying purchase order record which we map as received inventory
+      const res = await purchaseOrdersAPI.delete(id)
+      if (res.status >= 200 && res.status < 300) {
+        await fetchInventoryData()
+        setIsDeleteDialogOpen(false)
+        setDeleteTarget(null)
+      } else {
+        setError("Failed to delete the received inventory item.")
+      }
+    } catch (error: any) {
+      console.error("Failed to delete received inventory:", error)
+      setError(`Failed to delete received inventory: ${error.message}`)
+    }
+  }
+
+  const openDeleteDialog = (item: InventoryItem) => {
+    setDeleteTarget(item)
+    setIsDeleteDialogOpen(true)
   }
 
   const handleSaveEdit = async () => {
@@ -481,6 +506,15 @@ export function Inventory() {
                             >
                               Edit
                             </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              style={{ borderColor: "#dc2626", color: "#dc2626" }}
+                              className="hover:bg-red-50 min-h-[36px]"
+                              onClick={() => openDeleteDialog(item)}
+                            >
+                              Delete
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -541,6 +575,15 @@ export function Inventory() {
                               onClick={() => handleEditInventory(item)}
                             >
                               Edit
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              style={{ borderColor: "#dc2626", color: "#dc2626" }}
+                              className="w-full sm:w-auto hover:bg-red-50 min-h-[44px]"
+                              onClick={() => openDeleteDialog(item)}
+                            >
+                              Delete
                             </Button>
                           </div>
                         </div>
@@ -636,6 +679,42 @@ export function Inventory() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+      
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="w-[95vw] max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle className="text-red-600">Delete Received Inventory</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-gray-600">
+              Are you sure you want to delete this received inventory entry? This action cannot be undone.
+            </p>
+            {deleteTarget && (
+              <div className="bg-gray-50 p-3 rounded">
+                <p className="text-sm text-gray-700">PO Number: <span className="font-medium">{deleteTarget.poNumber}</span></p>
+                <p className="text-sm text-gray-700">Product: <span className="font-medium">{deleteTarget.productName}</span></p>
+                <p className="text-sm text-gray-700">Supplier: <span className="font-medium">{deleteTarget.supplierName}</span></p>
+              </div>
+            )}
+            <div className="flex gap-2 pt-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setIsDeleteDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="flex-1 bg-red-600 hover:bg-red-700"
+                onClick={() => deleteTarget && handleDeleteReceived(deleteTarget.id)}
+              >
+                Delete
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

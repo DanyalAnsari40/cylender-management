@@ -14,7 +14,6 @@ import { suppliersAPI } from "@/lib/api"
 
 interface Supplier {
   _id: string
-  invoiceNumber: string
   companyName: string
   contactPerson: string
   phone: string
@@ -31,7 +30,6 @@ export function SupplierManagement() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null)
   const [formData, setFormData] = useState({
-    invoiceNumber: "",
     companyName: "",
     contactPerson: "",
     phone: "",
@@ -79,7 +77,6 @@ export function SupplierManagement() {
 
   const resetForm = () => {
     setFormData({
-      invoiceNumber: "",
       companyName: "",
       contactPerson: "",
       phone: "",
@@ -94,7 +91,6 @@ export function SupplierManagement() {
   const handleEdit = (supplier: Supplier) => {
     setEditingSupplier(supplier)
     setFormData({
-      invoiceNumber: supplier.invoiceNumber,
       companyName: supplier.companyName,
       contactPerson: supplier.contactPerson,
       phone: supplier.phone,
@@ -159,47 +155,48 @@ export function SupplierManagement() {
                   </DialogTitle>
                 </DialogHeader>
 
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-3">
-                    <Label htmlFor="invoiceNumber" className="text-sm font-semibold text-gray-700">
-                      Invoice Number
-                    </Label>
-                    <Input
-                      id="invoiceNumber"
-                      placeholder="Enter invoice number"
-                      value={formData.invoiceNumber}
-                      onChange={(e) => setFormData({ ...formData, invoiceNumber: e.target.value })}
-                      className="h-12 border-2 border-gray-200 rounded-xl focus:border-[#2B3068] transition-colors"
-                      required
-                    />
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-3">
+                      <Label htmlFor="companyName" className="text-sm font-semibold text-gray-700">
+                        Company Name
+                      </Label>
+                      <Input
+                        id="companyName"
+                        placeholder="Enter company name"
+                        value={formData.companyName}
+                        onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+                        className="h-12 border-2 border-gray-200 rounded-xl focus:border-[#2B3068] transition-colors"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-3">
+                      <Label htmlFor="contactPerson" className="text-sm font-semibold text-gray-700">
+                        Contact Person
+                      </Label>
+                      <Input
+                        id="contactPerson"
+                        placeholder="Enter contact person name"
+                        value={formData.contactPerson}
+                        onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })}
+                        className="h-12 border-2 border-gray-200 rounded-xl focus:border-[#2B3068] transition-colors"
+                        required
+                      />
+                    </div>
                   </div>
 
-                  <div className="space-y-3">
-                    <Label htmlFor="companyName" className="text-sm font-semibold text-gray-700">
-                      Company Name
-                    </Label>
-                    <Input
-                      id="companyName"
-                      placeholder="Enter company name"
-                      value={formData.companyName}
-                      onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                      className="h-12 border-2 border-gray-200 rounded-xl focus:border-[#2B3068] transition-colors"
-                      required
-                    />
-                  </div>
-                </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-3">
-                    <Label htmlFor="contactPerson" className="text-sm font-semibold text-gray-700">
-                      Contact Person
+                    <Label htmlFor="email" className="text-sm font-semibold text-gray-700">
+                      Email
                     </Label>
                     <Input
-                      id="contactPerson"
-                      placeholder="Enter contact person name"
-                      value={formData.contactPerson}
-                      onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })}
+                      id="email"
+                      type="email"
+                      placeholder="Enter email address"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       className="h-12 border-2 border-gray-200 rounded-xl focus:border-[#2B3068] transition-colors"
                       required
                     />
@@ -220,20 +217,7 @@ export function SupplierManagement() {
                   </div>
                 </div>
 
-                <div className="space-y-3">
-                  <Label htmlFor="email" className="text-sm font-semibold text-gray-700">
-                    Email
-                  </Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="Enter email address"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="h-12 border-2 border-gray-200 rounded-xl focus:border-[#2B3068] transition-colors"
-                    required
-                  />
-                </div>
+                
 
                 <div className="space-y-3">
                   <Label htmlFor="address" className="text-sm font-semibold text-gray-700">
@@ -314,7 +298,6 @@ export function SupplierManagement() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-gray-50 border-b-2 border-gray-200">
-                  <TableHead className="font-bold text-gray-700 p-4">Invoice #</TableHead>
                   <TableHead className="font-bold text-gray-700 p-4">Company Name</TableHead>
                   <TableHead className="font-bold text-gray-700 p-4">Contact Person</TableHead>
                   <TableHead className="font-bold text-gray-700 p-4">Phone</TableHead>
@@ -326,7 +309,6 @@ export function SupplierManagement() {
               <TableBody>
                 {suppliers.map((supplier) => (
                   <TableRow key={supplier._id} className="hover:bg-gray-50 transition-colors border-b border-gray-100">
-                    <TableCell className="font-semibold text-[#2B3068] p-4">{supplier.invoiceNumber}</TableCell>
                     <TableCell className="p-4 font-medium">{supplier.companyName}</TableCell>
                     <TableCell className="p-4">{supplier.contactPerson}</TableCell>
                     <TableCell className="p-4">{supplier.phone}</TableCell>
@@ -365,7 +347,7 @@ export function SupplierManagement() {
                 ))}
                 {suppliers.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-12">
+                    <TableCell colSpan={6} className="text-center py-12">
                       <div className="text-gray-500">
                         <Truck className="w-16 h-16 mx-auto mb-4 opacity-50" />
                         <p className="text-lg font-medium">No suppliers found</p>

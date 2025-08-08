@@ -4,8 +4,8 @@ const SupplierSchema = new mongoose.Schema(
   {
     invoiceNumber: {
       type: String,
-      required: true,
-      unique: true,
+      required: false,
+      default: undefined,
     },
     companyName: {
       type: String,
@@ -42,4 +42,8 @@ const SupplierSchema = new mongoose.Schema(
   },
 )
 
-export default mongoose.models.Supplier || mongoose.model("Supplier", SupplierSchema)
+// Force refresh the model in dev to ensure schema changes are applied
+if (mongoose.models.Supplier) {
+  delete mongoose.models.Supplier
+}
+export default mongoose.model("Supplier", SupplierSchema)
