@@ -29,6 +29,9 @@ export function SupplierManagement() {
   const [submitting, setSubmitting] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [supplierToDelete, setSupplierToDelete] = useState<Supplier | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const [formData, setFormData] = useState({
     companyName: "",
     contactPerson: "",
@@ -103,14 +106,22 @@ export function SupplierManagement() {
   }
 
   const handleDelete = async (id: string) => {
-    if (confirm("Are you sure you want to delete this supplier?")) {
-      try {
-        await suppliersAPI.delete(id)
-        await fetchSuppliers()
-      } catch (error: any) {
-        alert(error.response?.data?.error || "Failed to delete supplier")
-      }
+    setDeleting(true)
+    try {
+      await suppliersAPI.delete(id)
+      await fetchSuppliers()
+      setSupplierToDelete(null)
+      setDeleteDialogOpen(false)
+    } catch (error: any) {
+      alert(error.response?.data?.error || "Failed to delete supplier")
+    } finally {
+      setDeleting(false)
     }
+  }
+
+  const openDeleteDialog = (supplier: Supplier) => {
+    setSupplierToDelete(supplier)
+    setDeleteDialogOpen(true)
   }
 
   if (loading) {
@@ -336,7 +347,7 @@ export function SupplierManagement() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleDelete(supplier._id)}
+                          onClick={() => openDeleteDialog(supplier)}
                           className="border-red-500 text-red-500 hover:bg-red-500 hover:text-white transition-colors"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -361,6 +372,54 @@ export function SupplierManagement() {
           </div>
         </CardContent>
       </Card>
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-[#2B3068]">
+              <Trash2 className="w-5 h-5 text-red-600" />
+              Delete Supplier
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-gray-700">
+              Are you sure you want to delete
+              {" "}
+              <span className="font-semibold">
+                {supplierToDelete?.companyName || "this supplier"}
+              </span>
+              ? This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setDeleteDialogOpen(false)
+                  setSupplierToDelete(null)
+                }}
+                className="min-w-[100px]"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={() => supplierToDelete && handleDelete(supplierToDelete._id)}
+                className="bg-red-600 hover:bg-red-700 text-white min-w-[120px]"
+                disabled={deleting}
+              >
+                {deleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Deleting...
+                  </>
+                ) : (
+                  "Delete"
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
       
     </div>
   )
