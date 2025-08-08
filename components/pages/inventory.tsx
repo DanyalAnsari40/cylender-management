@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Package, Loader2, Edit } from "lucide-react"
-import { purchaseOrdersAPI, inventoryAPI, productsAPI } from "@/lib/api"
+import { purchaseOrdersAPI, inventoryAPI, productsAPI, suppliersAPI } from "@/lib/api"
 
 interface InventoryItem {
   id: string
@@ -34,8 +34,15 @@ interface Product {
   currentStock: number
 }
 
+interface Supplier {
+  _id: string
+  name: string
+}
+
 export function Inventory() {
   const [inventory, setInventory] = useState<InventoryItem[]>([])
+  const [products, setProducts] = useState<Product[]>([])
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string>("")
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -53,28 +60,117 @@ export function Inventory() {
   const fetchInventoryData = async () => {
     try {
       setError("")
-      console.log("Fetching inventory data from API...")
-      
-      const inventoryRes = await inventoryAPI.getAll()
-      console.log("Inventory response:", inventoryRes)
-      
-      // The API response structure
-      const inventoryData = inventoryRes.data?.data || inventoryRes.data || []
-      console.log("Inventory data:", inventoryData)
-      
-      // Ensure it's always an array
-      const inventoryItems = Array.isArray(inventoryData) ? inventoryData : []
-      console.log("Final inventory data:", inventoryItems)
+      const [purchaseOrdersRes, productsRes, suppliersRes] = await Promise.all([
+        purchaseOrdersAPI.getAll(),
+        productsAPI.getAll(),
+        suppliersAPI.getAll()
+      ])
+
+      const purchaseOrdersData = purchaseOrdersRes.data?.data || purchaseOrdersRes.data || []
+      const productsData = Array.isArray(productsRes.data?.data)
+        ? productsRes.data.data
+        : Array.isArray(productsRes.data)
+          ? productsRes.data
+          : Array.isArray(productsRes)
+            ? productsRes
+            : []
+      const suppliersData = Array.isArray(suppliersRes.data?.data)
+        ? suppliersRes.data.data
+        : Array.isArray(suppliersRes.data)
+          ? suppliersRes.data
+          : Array.isArray(suppliersRes)
+            ? suppliersRes
+            : []
+
+      // Build quick-lookup maps by ID
+      // Build maps with both _id and id keys for robustness
+      const productsMap = new Map<string, any>()
+      ;(productsData as any[]).filter(Boolean).forEach((p: any) => {
+        if (p._id) productsMap.set(p._id, p)
+        if (p.id) productsMap.set(p.id, p)
+      })
+      const suppliersMap = new Map<string, any>()
+      ;(suppliersData as any[]).filter(Boolean).forEach((s: any) => {
+        if (s._id) suppliersMap.set(s._id, s)
+        if (s.id) suppliersMap.set(s.id, s)
+      })
+
+      const inventoryItems = Array.isArray(purchaseOrdersData)
+        ? purchaseOrdersData.map((order: any, idx: number) => {
+            const productRef = order.product ?? order.productId ?? order.productID
+            const supplierRef = order.supplier ?? order.supplierId ?? order.supplierID ?? order.vendor
+
+            // Resolve product name from populated object, ID lookup, or fallback fields
+            let resolvedProductName = 'Unknown Product'
+            if (productRef && typeof productRef === 'object') {
+              resolvedProductName = productRef.name || productRef.title || order.productName || resolvedProductName
+            } else if (typeof productRef === 'string') {
+              const p = productsMap.get(productRef)
+              if (p) resolvedProductName = p.name || p.title || resolvedProductName
+              else resolvedProductName = order.productName || resolvedProductName
+            } else {
+              resolvedProductName = order.productName || resolvedProductName
+            }
+            if (resolvedProductName === 'Unknown Product' && typeof productRef === 'string') {
+              resolvedProductName = productRef
+            }
+
+            // Resolve supplier name from populated object, ID lookup, or fallback fields
+            let resolvedSupplierName = 'Unknown Supplier'
+            if (supplierRef && typeof supplierRef === 'object') {
+              resolvedSupplierName = supplierRef.name || supplierRef.companyName || supplierRef.supplierName || order.supplierName || order.vendorName || resolvedSupplierName
+            } else if (typeof supplierRef === 'string') {
+              const s = suppliersMap.get(supplierRef)
+              if (s) resolvedSupplierName = s.name || s.companyName || s.supplierName || resolvedSupplierName
+              else resolvedSupplierName = order.supplierName || order.vendorName || resolvedSupplierName
+            } else {
+              resolvedSupplierName = order.supplierName || order.vendorName || resolvedSupplierName
+            }
+            if (resolvedSupplierName === 'Unknown Supplier' && typeof supplierRef === 'string') {
+              resolvedSupplierName = supplierRef
+            }
+
+            // Debug when names cannot be resolved
+            if (resolvedSupplierName === 'Unknown Supplier') {
+              console.debug('[Inventory] Could not resolve supplier name for PO', order.poNumber || order._id, {
+                supplierRef,
+                orderSupplier: order.supplier,
+                supplierId: typeof supplierRef === 'string' ? supplierRef : supplierRef?._id,
+                suppliersSample: suppliersData?.slice?.(0, 1),
+              })
+            }
+            if (resolvedProductName === 'Unknown Product' && idx < 3) {
+              console.debug('[Inventory] Could not resolve product name for PO', order.poNumber || order._id, {
+                productRef,
+                orderProduct: order.product,
+                productId: typeof productRef === 'string' ? productRef : productRef?._id,
+                productsSample: productsData?.slice?.(0, 1),
+              })
+            }
+
+            return {
+              id: order._id,
+              poNumber: order.poNumber || `PO-${order._id?.slice(-6) || 'UNKNOWN'}`,
+              productName: resolvedProductName,
+              supplierName: resolvedSupplierName,
+              purchaseDate: order.purchaseDate || order.createdAt,
+              quantity: order.quantity || 0,
+              unitPrice: order.unitPrice || 0,
+              totalAmount: order.totalAmount || 0,
+              status: order.inventoryStatus || 'pending',
+              purchaseType: order.purchaseType || 'gas'
+            } as InventoryItem
+          })
+        : []
 
       setInventory(inventoryItems)
+      setProducts(productsData)
+      setSuppliers(suppliersData)
     } catch (error: any) {
-      console.error("Failed to fetch inventory data:", error)
-      if (error.response?.status === 401) {
-        setError("Authentication required. Please log in to view inventory.")
-      } else {
-        setError(`Failed to load inventory: ${error.message}`)
-      }
+      setError(`Failed to load inventory: ${error.message}`)
       setInventory([])
+      setProducts([])
+      setSuppliers([])
     } finally {
       setLoading(false)
     }
@@ -145,6 +241,18 @@ export function Inventory() {
     setIsEditDialogOpen(false)
     setEditingItem(null)
     setEditFormData({ quantity: "", unitPrice: "", totalAmount: "" })
+  }
+
+  const getAvailableStock = (productName: string) => {
+    const product = products.find(p => p.name === productName)
+    if (!product) {
+      return { stock: 0, color: "text-red-600" }
+    }
+    const stock = Number(product.currentStock) || 0
+    let color = "text-green-600"
+    if (stock === 0) color = "text-red-600"
+    else if (stock < 10) color = "text-orange-600"
+    return { stock, color }
   }
 
   const pendingItems = inventory.filter((item) => item.status === "pending")
@@ -346,6 +454,7 @@ export function Inventory() {
                       <TableHead className="font-bold text-gray-700 p-4">Supplier</TableHead>
                       <TableHead className="font-bold text-gray-700 p-4">Type</TableHead>
                       <TableHead className="font-bold text-gray-700 p-4">Quantity</TableHead>
+                      <TableHead className="font-bold text-gray-700 p-4">Available Stock</TableHead>
                       <TableHead className="font-bold text-gray-700 p-4">Unit Price</TableHead>
                       <TableHead className="font-bold text-gray-700 p-4">Total</TableHead>
                       <TableHead className="font-bold text-gray-700 p-4">Actions</TableHead>
@@ -363,6 +472,7 @@ export function Inventory() {
                           </Badge>
                         </TableCell>
                         <TableCell className="p-4">{item.quantity}</TableCell>
+                        <TableCell className={`p-4 font-semibold ${getAvailableStock(item.productName).color}`}>{getAvailableStock(item.productName).stock}</TableCell>
                         <TableCell className="p-4">AED {item.unitPrice.toFixed(2)}</TableCell>
                         <TableCell className="p-4 font-semibold">AED {item.totalAmount.toFixed(2)}</TableCell>
                         <TableCell className="p-4">
@@ -382,7 +492,7 @@ export function Inventory() {
                     ))}
                     {receivedItems.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center text-gray-500 py-12">
+                        <TableCell colSpan={9} className="text-center text-gray-500 py-12">
                           <Package className="w-16 h-16 mx-auto mb-4 opacity-50" />
                           <p className="text-lg font-medium">No received items</p>
                           <p className="text-sm">All items are pending</p>
