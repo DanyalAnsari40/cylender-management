@@ -1,4 +1,4 @@
-import dbConnect from "../../lib/dbConnect"
+import dbConnect from "../../lib/mongodb"
 import Sale from "../../models/Sale"
 import EmployeeSale from "../../models/EmployeeSale"
 import Cylinder from "../../models/Cylinder"
