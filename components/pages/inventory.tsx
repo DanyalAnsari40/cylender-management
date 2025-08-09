@@ -54,6 +54,7 @@ export function Inventory() {
   })
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<InventoryItem | null>(null)
+  const [searchTerm, setSearchTerm] = useState("")
 
   useEffect(() => {
     fetchInventoryData()
@@ -278,6 +279,20 @@ export function Inventory() {
   const pendingItems = inventory.filter((item) => item.status === "pending")
   const receivedItems = inventory.filter((item) => item.status === "received")
 
+  const norm = (v?: string | number) => (v === undefined || v === null ? "" : String(v)).toLowerCase()
+  const matchesQuery = (it: InventoryItem, q: string) =>
+    norm(it.poNumber).includes(q) ||
+    norm(it.productName).includes(q) ||
+    norm(it.supplierName).includes(q) ||
+    norm(it.purchaseType).includes(q) ||
+    norm(it.quantity).includes(q) ||
+    norm(it.unitPrice).includes(q) ||
+    norm(it.totalAmount).includes(q)
+
+  const q = searchTerm.trim().toLowerCase()
+  const filteredPending = q ? pendingItems.filter((it) => matchesQuery(it, q)) : pendingItems
+  const filteredReceived = q ? receivedItems.filter((it) => matchesQuery(it, q)) : receivedItems
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -319,7 +334,19 @@ export function Inventory() {
         <TabsContent value="pending">
           <Card className="border-0 shadow-xl rounded-xl sm:rounded-2xl overflow-hidden">
             <CardHeader className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] text-white p-4 sm:p-6">
-              <CardTitle className="text-lg sm:text-xl lg:text-2xl font-bold">Pending Purchase Orders</CardTitle>
+              <div className="flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-6">
+                <CardTitle className="text-lg sm:text-xl lg:text-2xl font-bold flex-1">
+                  Pending Purchase Orders ({filteredPending.length}/{pendingItems.length})
+                </CardTitle>
+                <div className="bg-white rounded-xl p-2 flex items-center gap-2 w-full lg:w-80">
+                  <Input
+                    placeholder="Search PO, product, supplier, type..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="h-10 text-gray-800"
+                  />
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               {/* Desktop Table View */}
@@ -338,7 +365,7 @@ export function Inventory() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {pendingItems.map((item) => (
+                    {filteredPending.map((item) => (
                       <TableRow key={item.id} className="hover:bg-gray-50 transition-colors border-b border-gray-100">
                         <TableCell className="font-semibold text-[#2B3068] p-4">{item.poNumber}</TableCell>
                         <TableCell className="p-4">{item.productName}</TableCell>
@@ -374,7 +401,7 @@ export function Inventory() {
                         </TableCell>
                       </TableRow>
                     ))}
-                    {pendingItems.length === 0 && (
+                    {filteredPending.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={8} className="text-center text-gray-500 py-12">
                           <Package className="w-16 h-16 mx-auto mb-4 opacity-50" />
@@ -389,9 +416,9 @@ export function Inventory() {
 
               {/* Mobile Card View */}
               <div className="lg:hidden">
-                {pendingItems.length > 0 ? (
+                {filteredPending.length > 0 ? (
                   <div className="divide-y divide-gray-200">
-                    {pendingItems.map((item) => (
+                    {filteredPending.map((item) => (
                       <div key={item.id} className="p-4 sm:p-6 hover:bg-gray-50 transition-colors">
                         <div className="space-y-3">
                           <div className="flex justify-between items-start">
@@ -461,7 +488,19 @@ export function Inventory() {
         <TabsContent value="received">
           <Card className="border-0 shadow-xl rounded-xl sm:rounded-2xl overflow-hidden">
             <CardHeader className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] text-white p-4 sm:p-6">
-              <CardTitle className="text-lg sm:text-xl lg:text-2xl font-bold">Received Inventory Items</CardTitle>
+              <div className="flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-6">
+                <CardTitle className="text-lg sm:text-xl lg:text-2xl font-bold flex-1">
+                  Received Inventory Items ({filteredReceived.length}/{receivedItems.length})
+                </CardTitle>
+                <div className="bg-white rounded-xl p-2 flex items-center gap-2 w-full lg:w-80">
+                  <Input
+                    placeholder="Search PO, product, supplier, type..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="h-10 text-gray-800"
+                  />
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               {/* Desktop Table View */}
@@ -481,7 +520,7 @@ export function Inventory() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {receivedItems.map((item) => (
+                    {filteredReceived.map((item) => (
                       <TableRow key={item.id} className="hover:bg-gray-50 transition-colors border-b border-gray-100">
                         <TableCell className="font-semibold text-[#2B3068] p-4">{item.poNumber}</TableCell>
                         <TableCell className="p-4">{item.productName}</TableCell>
@@ -519,7 +558,7 @@ export function Inventory() {
                         </TableCell>
                       </TableRow>
                     ))}
-                    {receivedItems.length === 0 && (
+                    {filteredReceived.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={9} className="text-center text-gray-500 py-12">
                           <Package className="w-16 h-16 mx-auto mb-4 opacity-50" />
@@ -534,9 +573,9 @@ export function Inventory() {
 
               {/* Mobile Card View */}
               <div className="lg:hidden">
-                {receivedItems.length > 0 ? (
+                {filteredReceived.length > 0 ? (
                   <div className="divide-y divide-gray-200">
-                    {receivedItems.map((item) => (
+                    {filteredReceived.map((item) => (
                       <div key={item.id} className="p-4 sm:p-6 hover:bg-gray-50 transition-colors">
                         <div className="space-y-3">
                           <div className="flex justify-between items-start">

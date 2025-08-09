@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Edit, Trash2, Loader2, ShoppingCart, AlertCircle } from "lucide-react"
+import { Plus, Edit, Trash2, Loader2, ShoppingCart, AlertCircle, Package as PackageIcon } from "lucide-react"
 import { suppliersAPI, productsAPI, purchaseOrdersAPI } from "@/lib/api"
 
 interface PurchaseOrder {
@@ -45,6 +45,7 @@ export function PurchaseManagement() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingOrder, setEditingOrder] = useState<PurchaseOrder | null>(null)
   const [error, setError] = useState<string>("")
+  const [searchTerm, setSearchTerm] = useState("")
   const [formData, setFormData] = useState(() => ({
     supplierId: "",
     purchaseDate: new Date().toISOString().split("T")[0],
@@ -278,6 +279,22 @@ export function PurchaseManagement() {
       </div>
     )
   }
+
+  const norm = (v?: string) => (v || "").toLowerCase()
+  const filteredOrders = purchaseOrders.filter((o) => {
+    const q = searchTerm.trim().toLowerCase()
+    if (!q) return true
+    const supplierName = o.supplier?.companyName
+    const productName = o.product?.name
+    const dateStr = o.purchaseDate ? new Date(o.purchaseDate).toLocaleDateString() : ""
+    return (
+      norm(o.poNumber).includes(q) ||
+      norm(supplierName).includes(q) ||
+      norm(productName).includes(q) ||
+      norm(o.status).includes(q) ||
+      norm(dateStr).includes(q)
+    )
+  })
 
   return (
     <div className="pt-16 lg:pt-0 space-y-6 sm:space-y-8">
@@ -541,12 +558,22 @@ export function PurchaseManagement() {
       {/* Purchase Orders Table */}
       <Card className="border-0 shadow-xl rounded-xl sm:rounded-2xl overflow-hidden">
         <CardHeader className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] text-white p-4 sm:p-6">
-          <CardTitle className="text-lg sm:text-xl lg:text-2xl font-bold flex items-center gap-2">
-            Purchase Orders
-            <Badge variant="secondary" className="bg-white/20 text-white ml-2 text-xs sm:text-sm">
-              {purchaseOrders.length} orders
-            </Badge>
-          </CardTitle>
+          <div className="flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-6">
+            <CardTitle className="text-lg sm:text-xl lg:text-2xl font-bold flex items-center gap-2 flex-1">
+              Purchase Orders
+              <Badge variant="secondary" className="bg-white/20 text-white ml-2 text-xs sm:text-sm">
+                {filteredOrders.length}/{purchaseOrders.length} orders
+              </Badge>
+            </CardTitle>
+            <div className="bg-white rounded-xl p-2 flex items-center gap-2 w-full lg:w-80">
+              <Input
+                placeholder="Search PO, supplier, product, status, date..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="h-10 text-gray-800"
+              />
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -583,7 +610,7 @@ export function PurchaseManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {purchaseOrders.map((order) => (
+                {filteredOrders.map((order) => (
                   <TableRow key={order._id} className="hover:bg-gray-50 transition-colors border-b border-gray-100">
                     <TableCell className="font-semibold text-[#2B3068] p-2 sm:p-4 text-xs sm:text-sm">
                       {order.poNumber || 'N/A'}
@@ -646,11 +673,11 @@ export function PurchaseManagement() {
                     </TableCell>
                   </TableRow>
                 ))}
-                {purchaseOrders.length === 0 && (
+                {filteredOrders.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={9} className="text-center py-8 sm:py-12">
                       <div className="text-gray-500">
-                        <ShoppingCart className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-4 opacity-50" />
+                        <PackageIcon className="w-16 h-16 mx-auto mb-4 opacity-50" />
                         <p className="text-base sm:text-lg font-medium">No purchase orders found</p>
                         <p className="text-sm">Create your first purchase order to get started</p>
                       </div>

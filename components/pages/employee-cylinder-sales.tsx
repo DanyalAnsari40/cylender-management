@@ -1035,7 +1035,7 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
       <SignatureDialog
         isOpen={isSignatureDialogOpen}
         onClose={() => setIsSignatureDialogOpen(false)}
-        onComplete={handleSignatureComplete}
+        onSignatureComplete={handleSignatureComplete}
         customerName={transactionForSignature.customer.name}
       />
     )}

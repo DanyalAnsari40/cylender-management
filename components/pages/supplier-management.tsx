@@ -32,6 +32,7 @@ export function SupplierManagement() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [supplierToDelete, setSupplierToDelete] = useState<Supplier | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [searchTerm, setSearchTerm] = useState("")
   const [formData, setFormData] = useState({
     companyName: "",
     contactPerson: "",
@@ -134,6 +135,19 @@ export function SupplierManagement() {
       </div>
     )
   }
+
+  const normalized = (v: string | undefined) => (v || "").toLowerCase()
+  const filteredSuppliers = suppliers.filter((s) => {
+    const q = searchTerm.trim().toLowerCase()
+    if (!q) return true
+    return (
+      normalized(s.companyName).includes(q) ||
+      normalized(s.contactPerson).includes(q) ||
+      normalized(s.phone).includes(q) ||
+      normalized(s.email).includes(q) ||
+      normalized(s.status).includes(q)
+    )
+  })
 
   return (
     <div className="pt-16 lg:pt-0 space-y-4 sm:space-y-6 lg:space-y-8">
@@ -302,7 +316,17 @@ export function SupplierManagement() {
       {/* Suppliers Table */}
       <Card className="border-0 shadow-xl rounded-2xl overflow-hidden">
         <CardHeader className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] text-white p-6">
-          <CardTitle className="text-2xl font-bold">Supplier List ({suppliers.length})</CardTitle>
+          <div className="flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-6">
+            <CardTitle className="text-2xl font-bold flex-1">Supplier List ({filteredSuppliers.length}/{suppliers.length})</CardTitle>
+            <div className="bg-white rounded-xl p-2 flex items-center gap-2 w-full lg:w-80">
+              <Input
+                placeholder="Search supplier, contact, phone, email, status..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="h-10 text-gray-800"
+              />
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -318,12 +342,12 @@ export function SupplierManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {suppliers.map((supplier) => (
-                  <TableRow key={supplier._id} className="hover:bg-gray-50 transition-colors border-b border-gray-100">
-                    <TableCell className="p-4 font-medium">{supplier.companyName}</TableCell>
-                    <TableCell className="p-4">{supplier.contactPerson}</TableCell>
-                    <TableCell className="p-4">{supplier.phone}</TableCell>
-                    <TableCell className="p-4">{supplier.email}</TableCell>
+                {filteredSuppliers.map((supplier) => (
+                <TableRow key={supplier._id} className="hover:bg-gray-50 transition-colors border-b border-gray-100">
+                  <TableCell className="p-4 font-medium">{supplier.companyName}</TableCell>
+                  <TableCell className="p-4">{supplier.contactPerson}</TableCell>
+                  <TableCell className="p-4">{supplier.phone}</TableCell>
+                  <TableCell className="p-4">{supplier.email}</TableCell>
                     <TableCell className="p-4">
                       <Badge
                         variant={supplier.status === "active" ? "default" : "secondary"}
@@ -356,7 +380,7 @@ export function SupplierManagement() {
                     </TableCell>
                   </TableRow>
                 ))}
-                {suppliers.length === 0 && (
+                {filteredSuppliers.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-12">
                       <div className="text-gray-500">

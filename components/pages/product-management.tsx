@@ -31,6 +31,7 @@ export function ProductManagement() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [productToDelete, setProductToDelete] = useState<Product | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [searchTerm, setSearchTerm] = useState("")
   const [formData, setFormData] = useState({
     name: "",
     category: "gas" as "gas" | "cylinder",
@@ -137,6 +138,18 @@ export function ProductManagement() {
       </div>
     )
   }
+
+  const norm = (v?: string) => (v || "").toLowerCase()
+  const filteredProducts = products.filter((p) => {
+    const q = searchTerm.trim().toLowerCase()
+    if (!q) return true
+    return (
+      norm(p.name).includes(q) ||
+      norm(p.category).includes(q) ||
+      norm(p.cylinderSize).includes(q) ||
+      String(p.currentStock ?? "").includes(q)
+    )
+  })
 
   return (
     <div className="pt-16 lg:pt-0 space-y-4 sm:space-y-6 lg:space-y-8">
@@ -273,7 +286,17 @@ export function ProductManagement() {
 
       <Card className="border-0 shadow-xl rounded-xl sm:rounded-2xl overflow-hidden">
         <CardHeader className="bg-gradient-to-r from-[#2B3068] to-[#1a1f4a] text-white p-4 sm:p-6">
-          <CardTitle className="text-lg sm:text-xl lg:text-2xl font-bold">Product List ({products.length})</CardTitle>
+          <div className="flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-6">
+            <CardTitle className="text-lg sm:text-xl lg:text-2xl font-bold flex-1">Product List ({filteredProducts.length}/{products.length})</CardTitle>
+            <div className="bg-white rounded-xl p-2 flex items-center gap-2 w-full lg:w-80">
+              <Input
+                placeholder="Search product name, category, type, stock..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="h-10 text-gray-800"
+              />
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {/* Desktop Table View */}
@@ -291,7 +314,7 @@ export function ProductManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {products.map((product) => (
+                {filteredProducts.map((product) => (
                   <TableRow key={product._id} className="hover:bg-gray-50 transition-colors border-b border-gray-100">
                     <TableCell className="font-semibold text-[#2B3068] p-4">{product.name}</TableCell>
                     <TableCell className="capitalize p-4">{product.category}</TableCell>
@@ -328,7 +351,7 @@ export function ProductManagement() {
                     </TableCell>
                   </TableRow>
                 ))}
-                {products.length === 0 && (
+                {filteredProducts.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center text-gray-500 py-12">
                       <div className="text-gray-500">
@@ -345,9 +368,9 @@ export function ProductManagement() {
 
           {/* Mobile Card View */}
           <div className="lg:hidden">
-            {products.length > 0 ? (
+            {filteredProducts.length > 0 ? (
               <div className="divide-y divide-gray-200">
-                {products.map((product) => (
+                {filteredProducts.map((product) => (
                   <div key={product._id} className="p-4 sm:p-6 hover:bg-gray-50 transition-colors">
                     <div className="space-y-3">
                       <div className="flex justify-between items-start">
