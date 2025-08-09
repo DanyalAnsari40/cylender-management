@@ -1,5 +1,4 @@
 "use client"
-
 import React, { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -10,10 +9,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { DollarSign, Users, Fuel, Cylinder, UserCheck, ChevronDown, ChevronRight, Eye, Activity, Loader2, Receipt, FileText } from "lucide-react"
+import { DollarSign, Users, Fuel, Cylinder, UserCheck, ChevronDown, ChevronRight, Eye, Activity, Loader2, Receipt, FileText, ListChecks, PlusCircle } from "lucide-react"
 import { reportsAPI } from "@/lib/api";
 import { SignatureDialog } from "@/components/signature-dialog"
 import { ReceiptDialog } from "@/components/receipt-dialog"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
 interface CustomerLedgerData {
   _id: string
@@ -63,6 +63,276 @@ export function Reports() {
   const [customers, setCustomers] = useState<CustomerLedgerData[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set())
+
+  // Daily Stock Report local model (stored in localStorage)
+  interface DailyStockEntry {
+    id: string
+    date: string // yyyy-mm-dd
+    itemName: string
+    openingFull: number
+    openingEmpty: number
+    refilled: number
+    cylinderSales: number
+    gasSales: number
+    closingFull?: number
+    closingEmpty?: number
+    createdAt: string
+  }
+
+  // Open the closing stock dialog for a specific entry
+  const openClosingDialog = (e: DailyStockEntry) => {
+    setClosingDialog({
+      open: true,
+      date: e.date,
+      itemName: e.itemName,
+      closingFull: "",
+      closingEmpty: "",
+    })
+  }
+
+  // Submit closing stock values; updates backend and table row
+  const submitClosingDialog = () => {
+    const cf = Number.parseFloat(closingDialog.closingFull)
+    const ce = Number.parseFloat(closingDialog.closingEmpty)
+    if (!Number.isFinite(cf) || cf < 0) return alert("Enter valid Remaining Full Cylinders")
+    if (!Number.isFinite(ce) || ce < 0) return alert("Enter valid Remaining Empty Cylinders")
+
+    const payload = {
+      date: closingDialog.date,
+      itemName: closingDialog.itemName,
+      closingFull: cf,
+      closingEmpty: ce,
+    }
+
+    ;(async () => {
+      try {
+        const res = await fetch(API_BASE, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+        if (!res.ok) throw new Error("post failed")
+        const json = await res.json()
+        const d = json?.data || payload
+        const updated = dsrEntries.map(row =>
+          row.itemName === payload.itemName && row.date === payload.date
+            ? { ...row, closingFull: d.closingFull, closingEmpty: d.closingEmpty }
+            : row
+        )
+        setDsrEntries(updated)
+        saveDsrLocal(updated)
+      } catch (e) {
+        const updated = dsrEntries.map(row =>
+          row.itemName === payload.itemName && row.date === payload.date
+            ? { ...row, closingFull: payload.closingFull, closingEmpty: payload.closingEmpty }
+            : row
+        )
+        setDsrEntries(updated)
+        saveDsrLocal(updated)
+        alert("Saved locally (offline). Will sync when online.")
+      } finally {
+        setClosingDialog(prev => ({ ...prev, open: false }))
+      }
+    })()
+  }
+
+  const [showDSRForm, setShowDSRForm] = useState(false)
+  const [showDSRList, setShowDSRList] = useState(false)
+  const [dsrEntries, setDsrEntries] = useState<DailyStockEntry[]>([])
+  const [dsrForm, setDsrForm] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    itemName: "",
+    openingFull: "",
+    openingEmpty: "",
+    refilled: "",
+    cylinderSales: "",
+    gasSales: "",
+  } as Record<string, string>)
+  // Closing stock dialog state
+  const [closingDialog, setClosingDialog] = useState({
+    open: false,
+    date: "",
+    itemName: "",
+    closingFull: "",
+    closingEmpty: "",
+  })
+
+  // Helpers: API endpoints + localStorage fallback
+  const DSR_KEY = "daily_stock_reports"
+  const API_BASE = "/api/daily-stock-reports"
+  const saveDsrLocal = (items: DailyStockEntry[]) => {
+    try { localStorage.setItem(DSR_KEY, JSON.stringify(items)) } catch {}
+  }
+  const loadDsrLocal = (): DailyStockEntry[] => {
+    try {
+      const raw = localStorage.getItem(DSR_KEY)
+      if (!raw) return []
+      const parsed = JSON.parse(raw)
+      return Array.isArray(parsed) ? parsed as DailyStockEntry[] : []
+    } catch { return [] }
+  }
+  const fetchDsrEntries = async () => {
+    try {
+      const res = await fetch(API_BASE, { cache: "no-store" })
+      if (!res.ok) throw new Error("api failed")
+      const data = await res.json()
+      const items = (data?.data || data?.results || []) as any[]
+      const mapped: DailyStockEntry[] = items.map((d: any) => ({
+        id: d._id || `${d.itemName}-${d.date}-${d.createdAt}`,
+        date: d.date,
+        itemName: d.itemName,
+        openingFull: Number(d.openingFull || 0),
+        openingEmpty: Number(d.openingEmpty || 0),
+        refilled: Number(d.refilled || 0),
+        cylinderSales: Number(d.cylinderSales || 0),
+        gasSales: Number(d.gasSales || 0),
+        closingFull: typeof d.closingFull === 'number' ? d.closingFull : undefined,
+        closingEmpty: typeof d.closingEmpty === 'number' ? d.closingEmpty : undefined,
+        createdAt: d.createdAt || new Date().toISOString(),
+      }))
+      setDsrEntries(mapped)
+      // keep a local mirror for offline viewing
+      saveDsrLocal(mapped)
+    } catch (e) {
+      // Fallback to local
+      const local = loadDsrLocal()
+      setDsrEntries(local)
+    }
+  }
+
+  // Load on mount
+  useEffect(() => {
+    fetchDsrEntries()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Prefill opening from previous day closing for same item (API first, fallback local)
+  const prefillOpeningFromPrevious = (date: string, itemName: string) => {
+    if (!date || !itemName) return
+    ;(async () => {
+      try {
+        const url = `${API_BASE}/previous?itemName=${encodeURIComponent(itemName)}&date=${encodeURIComponent(date)}`
+        const res = await fetch(url, { cache: "no-store" })
+        if (res.ok) {
+          const json = await res.json()
+          if (json?.data) {
+            setDsrForm(prevState => ({
+              ...prevState,
+              openingFull: String(json.data.closingFull ?? 0),
+              openingEmpty: String(json.data.closingEmpty ?? 0),
+            }))
+            return
+          }
+        }
+      } catch {}
+      // fallback to local mirror
+      const all = loadDsrLocal().filter(e => e.itemName.toLowerCase() === itemName.toLowerCase())
+      if (all.length === 0) return
+      const prev = all
+        .filter(e => e.date < date)
+        .sort((a, b) => b.date.localeCompare(a.date))[0]
+      if (prev) {
+        setDsrForm(prevState => ({
+          ...prevState,
+          openingFull: String(prev.closingFull ?? 0),
+          openingEmpty: String(prev.closingEmpty ?? 0),
+        }))
+      }
+    })()
+  }
+
+  const parseNum = (v: string) => {
+    const n = Number.parseFloat(v)
+    return Number.isFinite(n) ? n : 0
+  }
+
+  const computeClosing = () => {
+    const openingFull = parseNum(dsrForm.openingFull)
+    const openingEmpty = parseNum(dsrForm.openingEmpty)
+    const refilled = parseNum(dsrForm.refilled)
+    const cylinderSales = parseNum(dsrForm.cylinderSales)
+    const gasSales = parseNum(dsrForm.gasSales)
+    // Business rule (as provided): closing = opening + refilled - sales
+    const closingFull = Math.max(0, openingFull + refilled - cylinderSales)
+    // For empty, a reasonable simple flow: empty increases by sales and decreases by refills
+    const closingEmpty = Math.max(0, openingEmpty + cylinderSales - refilled)
+    return { closingFull, closingEmpty }
+  }
+
+  const handleDsrChange = (field: string, value: string) => {
+    setDsrForm(prev => ({ ...prev, [field]: value }))
+    if (field === "itemName" || field === "date") {
+      const itemName = field === "itemName" ? value : prevItemNameRef.current
+      const date = field === "date" ? value : dsrForm.date
+      // Attempt carry-forward when both are present
+      if ((field === "itemName" && value) || (field === "date" && dsrForm.itemName)) {
+        prefillOpeningFromPrevious(date, field === "itemName" ? value : dsrForm.itemName)
+      }
+      if (field === "itemName") prevItemNameRef.current = value
+    }
+  }
+
+  const prevItemNameRef = React.useRef("")
+
+  const handleDsrSubmit = () => {
+    if (!dsrForm.itemName.trim()) return alert("Please enter item name")
+    const payload = {
+      date: dsrForm.date,
+      itemName: dsrForm.itemName.trim(),
+      openingFull: parseNum(dsrForm.openingFull),
+      openingEmpty: parseNum(dsrForm.openingEmpty),
+      refilled: parseNum(dsrForm.refilled),
+      cylinderSales: parseNum(dsrForm.cylinderSales),
+      gasSales: parseNum(dsrForm.gasSales),
+    }
+    ;(async () => {
+      try {
+        const res = await fetch(API_BASE, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+        if (!res.ok) throw new Error("post failed")
+        const json = await res.json()
+        const d = json?.data || payload
+        const entry: DailyStockEntry = {
+          id: d._id || `${payload.itemName}-${payload.date}-${Date.now()}`,
+          date: payload.date,
+          itemName: payload.itemName,
+          openingFull: payload.openingFull,
+          openingEmpty: payload.openingEmpty,
+          refilled: payload.refilled,
+          cylinderSales: payload.cylinderSales,
+          gasSales: payload.gasSales,
+          closingFull: typeof d.closingFull === 'number' ? d.closingFull : undefined as any,
+          closingEmpty: typeof d.closingEmpty === 'number' ? d.closingEmpty : undefined as any,
+          createdAt: d.createdAt || new Date().toISOString(),
+        }
+        const updated = [entry, ...dsrEntries]
+        setDsrEntries(updated)
+        saveDsrLocal(updated)
+      } catch (e) {
+        // Offline/local fallback
+        const entry: DailyStockEntry = {
+          id: `${payload.itemName}-${payload.date}-${Date.now()}`,
+          ...payload,
+          createdAt: new Date().toISOString(),
+        }
+        const updated = [entry, ...dsrEntries]
+        setDsrEntries(updated)
+        saveDsrLocal(updated)
+        alert("Saved locally (offline). Will sync when online.")
+      } finally {
+        setShowDSRForm(false)
+      }
+    })()
+  }
+
+  const clearDsr = () => {
+    if (!confirm("Clear all Daily Stock Reports?")) return
+    setDsrEntries([])
+    saveDsrLocal([])
+  }
 
   
   // Autocomplete functionality state
@@ -471,6 +741,24 @@ export function Reports() {
         </h1>
         <p className="text-white/80 text-sm sm:text-base lg:text-lg">Comprehensive business insights and customer ledger</p>
       </div>
+
+      {/* Daily Stock Report (local model) */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle style={{ color: "#2B3068" }}>Daily Stock Report</CardTitle>
+          <p className="text-sm text-gray-600">Track opening/closing stock with daily refills and sales. Stored locally on this device.</p>
+        </CardHeader>
+        <CardContent className="flex flex-col sm:flex-row gap-3">
+          <Button onClick={() => setShowDSRForm(true)} className="w-full sm:w-auto" style={{ backgroundColor: "#2B3068" }}>
+            <PlusCircle className="h-4 w-4 mr-2" />
+            Daily Stock Report
+          </Button>
+          <Button variant="outline" onClick={() => setShowDSRList(true)} className="w-full sm:w-auto">
+            <ListChecks className="h-4 w-4 mr-2" />
+            View Reports
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -1007,6 +1295,148 @@ export function Reports() {
           onClose={() => setReceiptDialogData(null)}
         />
       )}
+
+      {/* DSR Form Dialog */}
+      <Dialog open={showDSRForm} onOpenChange={setShowDSRForm}>
+        <DialogContent className="max-w-[700px]">
+          <DialogHeader>
+            <DialogTitle>Daily Stock Report</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Date</Label>
+              <Input type="date" value={dsrForm.date} onChange={e => handleDsrChange("date", e.target.value)} />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Item Name</Label>
+              <Input placeholder="e.g., 5kg Cylinder" value={dsrForm.itemName} onChange={e => handleDsrChange("itemName", e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Opening Full</Label>
+              <Input type="number" min={0} value={dsrForm.openingFull} onChange={e => handleDsrChange("openingFull", e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Opening Empty</Label>
+              <Input type="number" min={0} value={dsrForm.openingEmpty} onChange={e => handleDsrChange("openingEmpty", e.target.value)} />
+            </div>
+            <div className="sm:col-span-2 pt-1">
+              <Label className="text-xs uppercase text-gray-500">During the day</Label>
+            </div>
+            <div className="space-y-2">
+              <Label>Refilled</Label>
+              <Input type="number" min={0} value={dsrForm.refilled} onChange={e => handleDsrChange("refilled", e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Cylinder Sales</Label>
+              <Input type="number" min={0} value={dsrForm.cylinderSales} onChange={e => handleDsrChange("cylinderSales", e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Gas Sales</Label>
+              <Input type="number" min={0} value={dsrForm.gasSales} onChange={e => handleDsrChange("gasSales", e.target.value)} />
+            </div>
+            {/* Closing stock is now captured via table action, not here */}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDSRForm(false)}>Cancel</Button>
+            <Button style={{ backgroundColor: "#2B3068" }} onClick={handleDsrSubmit}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DSR List Dialog */}
+      <Dialog open={showDSRList} onOpenChange={setShowDSRList}>
+        <DialogContent className="max-w-[900px]">
+          <DialogHeader>
+            <DialogTitle>Daily Stock Reports</DialogTitle>
+          </DialogHeader>
+          <div className="flex justify-between items-center mb-2">
+            <div className="text-sm text-gray-600">Total entries: {dsrEntries.length}</div>
+            <Button variant="destructive" onClick={clearDsr}>Clear All</Button>
+          </div>
+          <div className="border rounded-lg overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Item</TableHead>
+                  <TableHead>Opening Full</TableHead>
+                  <TableHead>Opening Empty</TableHead>
+                  <TableHead>Refilled</TableHead>
+                  <TableHead>Cylinder Sales</TableHead>
+                  <TableHead>Gas Sales</TableHead>
+                  <TableHead>Closing Full</TableHead>
+                  <TableHead>Closing Empty</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {dsrEntries.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center py-6 text-gray-500">No entries yet</TableCell>
+                  </TableRow>
+                )}
+                {dsrEntries
+                  .slice()
+                  .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))
+                  .map(e => (
+                  <TableRow key={e.id}>
+                    <TableCell>{e.date}</TableCell>
+                    <TableCell className="font-medium">{e.itemName}</TableCell>
+                    <TableCell>{e.openingFull}</TableCell>
+                    <TableCell>{e.openingEmpty}</TableCell>
+                    <TableCell>{e.refilled}</TableCell>
+                    <TableCell>{e.cylinderSales}</TableCell>
+                    <TableCell>{e.gasSales}</TableCell>
+                    <TableCell className="font-semibold text-green-600">
+                      {(
+                        typeof e.closingFull === 'number' && typeof e.closingEmpty === 'number' &&
+                        !(e.closingFull === 0 && e.closingEmpty === 0)
+                      ) ? (
+                        e.closingFull
+                      ) : (
+                        <Button size="sm" onClick={() => openClosingDialog(e)}>Add Closing Stock</Button>
+                      )}
+                    </TableCell>
+                    <TableCell className="font-semibold text-blue-600">
+                      {(
+                        typeof e.closingFull === 'number' && typeof e.closingEmpty === 'number' &&
+                        !(e.closingFull === 0 && e.closingEmpty === 0)
+                      ) ? (
+                        e.closingEmpty
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Closing Stock Dialog */}
+      <Dialog open={closingDialog.open} onOpenChange={(v) => setClosingDialog(prev => ({ ...prev, open: v }))}>
+        <DialogContent className="max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Add Closing Stock</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2 text-sm text-gray-600">{closingDialog.itemName} · {closingDialog.date}</div>
+            <div className="space-y-2">
+              <Label>Remaining Full Cylinders</Label>
+              <Input type="number" min={0} value={closingDialog.closingFull} onChange={e => setClosingDialog(prev => ({ ...prev, closingFull: e.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label>Remaining Empty Cylinders</Label>
+              <Input type="number" min={0} value={closingDialog.closingEmpty} onChange={e => setClosingDialog(prev => ({ ...prev, closingEmpty: e.target.value }))} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClosingDialog(prev => ({ ...prev, open: false }))}>Cancel</Button>
+            <Button style={{ backgroundColor: "#2B3068" }} onClick={() => submitClosingDialog()}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
