@@ -49,6 +49,8 @@ interface CylinderTransaction {
   depositAmount: number
   refillAmount: number
   returnAmount: number
+  // New: align with admin form
+  paymentOption?: 'debit' | 'credit' | 'delivery_note'
   paymentMethod: string
   cashAmount: number
   bankName: string
@@ -86,6 +88,19 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
   const [transactionForReceipt, setTransactionForReceipt] = useState<any | null>(null)
   const [transactionForSignature, setTransactionForSignature] = useState<any | null>(null)
 
+  // Modern stock validation dialog
+  const [stockAlert, setStockAlert] = useState<{
+    open: boolean;
+    productName?: string;
+    size?: string;
+    available?: number;
+    requested?: number;
+  }>({ open: false })
+
+  // Admin-style popup state
+  const [showStockValidationPopup, setShowStockValidationPopup] = useState(false)
+  const [stockValidationMessage, setStockValidationMessage] = useState("")
+
   // Customer search state
   const [customerSearch, setCustomerSearch] = useState("")
   const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false)
@@ -102,6 +117,8 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
     depositAmount: 0,
     refillAmount: 0,
     returnAmount: 0,
+    // New: aligns with admin page behavior
+    paymentOption: "debit" as "debit" | "credit" | "delivery_note",
     paymentMethod: "cash",
     cashAmount: 0,
     bankName: "",
@@ -113,8 +130,14 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
 
   useEffect(() => {
     fetchData()
-    fetchProducts()
   }, [user.id])
+
+  // Enforce delivery note behavior: zero deposit and pending status for non-refill
+  useEffect(() => {
+    if (formData.paymentOption === 'delivery_note' && formData.type !== 'refill') {
+      setFormData(prev => ({ ...prev, depositAmount: 0, status: 'pending' }))
+    }
+  }, [formData.paymentOption, formData.type])
 
   const fetchData = async () => {
     try {
@@ -144,24 +167,36 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
         setCustomers([])
       }
 
+      // We'll prefer assigned products from stock assignments below. Still read products to enrich objects if needed.
+      let allProducts: any[] = []
       if (productsResponse.ok) {
         const productsData = await productsResponse.json()
         const products = productsData.data || productsData
-        // Only set cylinder products
-        const cylinderProducts = Array.isArray(products) ? products.filter((p: any) => p.category === "cylinder") : []
-        setProducts(cylinderProducts)
+        allProducts = Array.isArray(products) ? products : []
       } else {
         console.error("Failed to fetch products:", productsResponse.status)
-        setProducts([])
       }
 
       if (stockAssignmentsResponse.ok) {
         const stockData = await stockAssignmentsResponse.json()
         const assignments = stockData.data || stockData
-        setStockAssignments(Array.isArray(assignments) ? assignments : [])
+        const list = Array.isArray(assignments) ? assignments : []
+        setStockAssignments(list)
+        // Derive assigned cylinder products with remaining quantity > 0
+        const assignedProductsMap = new Map<string, any>()
+        list
+          .filter(sa => sa?.product && sa?.product?.category === 'cylinder' && (sa.remainingQuantity || 0) > 0)
+          .forEach(sa => {
+            const prod = sa.product
+            // Prefer enriching from allProducts if exists (to ensure latest leastPrice), fallback to sa.product
+            const enriched = allProducts.find(p => p._id === prod._id) || prod
+            assignedProductsMap.set(enriched._id, enriched)
+          })
+        setProducts(Array.from(assignedProductsMap.values()))
       } else {
         console.error("Failed to fetch stock assignments:", stockAssignmentsResponse.status)
         setStockAssignments([])
+        setProducts([])
       }
     } catch (error) {
       console.error("Error fetching data:", error)
@@ -174,18 +209,7 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
     }
   }
 
-  const fetchProducts = async () => {
-    try {
-      const response = await fetch("/api/products")
-      const productsData = await response.json()
-      const products = productsData.data || productsData
-      // Only set cylinder products
-      const cylinderProducts = Array.isArray(products) ? products.filter((p: any) => p.category === "cylinder") : []
-      setProducts(cylinderProducts)
-    } catch (error) {
-      console.error("Failed to fetch products:", error)
-    }
-  }
+  // Removed standalone fetchProducts to avoid overriding assigned inventory selection
 
   const resetForm = () => {
     setFormData({
@@ -198,6 +222,7 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
       depositAmount: 0,
       refillAmount: 0,
       returnAmount: 0,
+      paymentOption: "debit" as any,
       paymentMethod: "cash",
       cashAmount: 0,
       bankName: "",
@@ -344,13 +369,18 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
       return
     }
 
-    // Calculate total received stock for this product
-    const totalReceivedStock = stockAssignments
-      .filter(sa => sa.product._id === formData.product)
-      .reduce((sum, sa) => sum + (sa.remainingQuantity || 0), 0)
-
-    if (totalReceivedStock < formData.quantity) {
-      toast.error(`Insufficient assigned stock for ${selectedProduct.name}. Available: ${totalReceivedStock}, Requested: ${formData.quantity}`)
+    // Validate against assigned stock for this product and cylinder size
+    const assignedAvailable = getAssignedAvailable()
+    if (assignedAvailable < formData.quantity) {
+      setStockAlert({
+        open: true,
+        productName: selectedProduct.name,
+        size: formData.cylinderSize,
+        available: assignedAvailable,
+        requested: formData.quantity,
+      })
+      setStockValidationMessage(`You requested ${formData.quantity} unit(s) of ${selectedProduct.name} (${formData.cylinderSize}). Only ${assignedAvailable} unit(s) are available in your assigned inventory.`)
+      setShowStockValidationPopup(true)
       return
     }
 
@@ -358,7 +388,7 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
     const calculatedAmount = selectedProduct.leastPrice * formData.quantity
 
     try {
-      const transactionData = {
+      const transactionData: any = {
         employeeId: user.id,
         type: formData.type,
         customer: formData.customer,
@@ -366,15 +396,27 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
         cylinderSize: formData.cylinderSize,
         quantity: formData.quantity,
         amount: calculatedAmount,
-        depositAmount: formData.type === "deposit" ? calculatedAmount : 0,
-        refillAmount: formData.type === "refill" ? calculatedAmount : 0,
-        returnAmount: formData.type === "return" ? calculatedAmount : 0,
-        paymentMethod: formData.paymentMethod,
-        cashAmount: formData.paymentMethod === "cash" ? calculatedAmount : 0,
-        bankName: formData.paymentMethod === "cheque" ? formData.bankName : "",
-        checkNumber: formData.paymentMethod === "cheque" ? formData.checkNumber : "",
-        status: formData.status,
-        notes: formData.notes
+        depositAmount:
+          formData.type === 'deposit'
+            ? (formData.paymentOption === 'delivery_note' ? 0 : Number(formData.depositAmount) || 0)
+            : 0,
+        refillAmount: formData.type === 'refill' ? calculatedAmount : 0,
+        returnAmount: formData.type === 'return' ? calculatedAmount : 0,
+        status: formData.paymentOption === 'delivery_note' ? 'pending' : formData.status,
+        notes: formData.notes,
+        paymentOption: formData.paymentOption,
+      }
+
+      if (formData.paymentOption === 'debit') {
+        transactionData.paymentMethod = formData.paymentMethod
+        transactionData.cashAmount = formData.paymentMethod === 'cash' ? Number(formData.cashAmount) || 0 : 0
+        transactionData.bankName = formData.paymentMethod === 'cheque' ? formData.bankName : undefined
+        transactionData.checkNumber = formData.paymentMethod === 'cheque' ? formData.checkNumber : undefined
+      } else {
+        transactionData.paymentMethod = undefined
+        transactionData.cashAmount = 0
+        transactionData.bankName = undefined
+        transactionData.checkNumber = undefined
       }
 
       const isEditing = editingTransactionId !== null
@@ -419,6 +461,7 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
       depositAmount: transaction.depositAmount || 0,
       refillAmount: transaction.refillAmount || 0,
       returnAmount: transaction.returnAmount || 0,
+      paymentOption: ((transaction as any).paymentOption || 'debit') as any,
       paymentMethod: transaction.paymentMethod || 'cash',
       cashAmount: transaction.cashAmount || 0,
       bankName: transaction.bankName || '',
@@ -513,6 +556,17 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
   // Get selected product details
   const getSelectedProduct = () => {
     return products.find(p => p._id === formData.product) || null;
+  };
+
+  // Get assigned remaining quantity for the selected product and cylinder size
+  const getAssignedAvailable = () => {
+    if (!formData.product) return 0;
+    const matches = stockAssignments.filter(sa => {
+      const sameProduct = sa?.product?._id === formData.product;
+      const sameSize = sa?.cylinderSize ? sa.cylinderSize === formData.cylinderSize : true;
+      return sameProduct && sameSize;
+    });
+    return matches.reduce((sum, sa) => sum + (sa.remainingQuantity || 0), 0);
   };
 
   // Filter transactions based on active tab
@@ -869,6 +923,7 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
           Price: AED {getSelectedProduct()!.leastPrice.toFixed(2)} per unit
         </p>
       )}
+      <p className="text-xs text-gray-500 mt-1">Assigned available: {getAssignedAvailable()}</p>
     </div>
 
     {/* Cylinder Size */}
@@ -911,32 +966,50 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
       />
     </div>
 
-    {/* Security Type (Payment Method) - Only show if not refill */}
+    {/* Payment Option + Received Via (like admin) - Only show if not refill */}
     {formData.type !== 'refill' && (
-      <div>
-        <Label htmlFor="paymentMethod">Security Type</Label>
-        <Select value={formData.paymentMethod} onValueChange={(value) => handleSelectChange("paymentMethod", value)}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select security type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="cash">Cash</SelectItem>
-            <SelectItem value="cheque">Cheque</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      <>
+        <div>
+          <Label htmlFor="paymentOption">Payment Option</Label>
+          <Select value={formData.paymentOption} onValueChange={(value) => handleSelectChange("paymentOption", value)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select payment option" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="debit">Debit</SelectItem>
+              <SelectItem value="credit">Credit</SelectItem>
+              <SelectItem value="delivery_note">Delivery Note</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {formData.paymentOption === 'debit' && (
+          <div>
+            <Label htmlFor="paymentMethod">Received Via</Label>
+            <Select value={formData.paymentMethod} onValueChange={(value) => handleSelectChange("paymentMethod", value)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select received via" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="cash">Cash</SelectItem>
+                <SelectItem value="cheque">Cheque</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </>
     )}
 
-    {/* Security Cash field (if cash) - Only show if not refill */}
-    {formData.type !== 'refill' && formData.paymentMethod === 'cash' && (
+    {/* Security Cash field (if cash) - Only when debit and not refill */}
+    {formData.type !== 'refill' && formData.paymentOption === 'debit' && formData.paymentMethod === 'cash' && (
       <div>
         <Label htmlFor="cashAmount">Security Cash</Label>
         <Input id="cashAmount" name="cashAmount" type="number" value={formData.cashAmount} onChange={handleChange} />
       </div>
     )}
 
-    {/* Cheque fields (if cheque) - Only show if not refill */}
-    {formData.type !== 'refill' && formData.paymentMethod === 'cheque' && (
+    {/* Cheque fields (if cheque) - Only when debit and not refill */}
+    {formData.type !== 'refill' && formData.paymentOption === 'debit' && formData.paymentMethod === 'cheque' && (
       <>
         <div>
           <Label htmlFor="bankName">Bank Name</Label>
@@ -949,11 +1022,21 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
       </>
     )}
 
-    {/* Deposit Amount - Only show if not refill */}
+    {/* Deposit Amount - Only show if not refill. Disabled and 0 for delivery note */}
     {formData.type !== 'refill' && (
       <div>
         <Label htmlFor="depositAmount">Deposit Amount</Label>
-        <Input id="depositAmount" name="depositAmount" type="number" value={formData.depositAmount} onChange={handleChange} />
+        <Input
+          id="depositAmount"
+          name="depositAmount"
+          type="number"
+          value={formData.paymentOption === 'delivery_note' ? 0 : formData.depositAmount}
+          onChange={handleChange}
+          disabled={formData.paymentOption === 'delivery_note'}
+        />
+        {formData.paymentOption === 'delivery_note' && (
+          <p className="text-sm text-gray-500">Deposit amount is 0 for Delivery Note. Status will be set to Pending.</p>
+        )}
       </div>
     )}
 
@@ -1049,6 +1132,30 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
         }}
         sale={transactionForReceipt}
       />
+    )}
+
+    {/* Stock Validation Popup (Admin-style) */}
+    {showStockValidationPopup && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={() => setShowStockValidationPopup(false)} />
+        <div className="relative bg-white rounded-2xl shadow-2xl p-8 mx-4 max-w-md w-full transform transition-all duration-300 scale-100 animate-in fade-in-0 zoom-in-95">
+          <div className="flex items-center justify-center w-16 h-16 mx-auto mb-4 bg-gradient-to-r from-red-500 to-red-600 rounded-full">
+            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          </div>
+          <div className="text-center">
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Stock Validation Error</h3>
+            <p className="text-gray-600 mb-6">{stockValidationMessage}</p>
+            <button
+              onClick={() => setShowStockValidationPopup(false)}
+              className="inline-flex items-center justify-center rounded-md bg-[#2B3068] text-white px-4 py-2 text-sm font-medium hover:bg-[#1a1f4a] focus:outline-none"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
     )}
     </div>
   )

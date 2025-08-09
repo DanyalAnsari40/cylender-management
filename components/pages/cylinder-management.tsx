@@ -322,6 +322,8 @@ export function CylinderManagement() {
     depositAmount: 0,
     refillAmount: 0,
     returnAmount: 0,
+    // New: payment option to control deposit amount behavior
+    paymentOption: "debit" as "debit" | "credit" | "delivery_note",
     paymentMethod: "cash" as "cash" | "cheque",
     cashAmount: 0,
     bankName: "",
@@ -345,6 +347,13 @@ export function CylinderManagement() {
       }
     }
   }, [formData.amount, formData.depositAmount, formData.type]);
+
+  // Enforce delivery note behavior: no deposit and pending status
+  useEffect(() => {
+    if (formData.paymentOption === 'delivery_note' && formData.type !== 'refill') {
+      setFormData(prev => ({ ...prev, depositAmount: 0, status: 'pending' }));
+    }
+  }, [formData.paymentOption, formData.type])
 
   const fetchData = async () => {
     try {
@@ -457,13 +466,16 @@ export function CylinderManagement() {
         cylinderSize: formData.cylinderSize,
         quantity: Number(formData.quantity) || 0,
         amount: Number(formData.amount) || 0,
-        depositAmount: formData.type === 'deposit' ? Number(formData.depositAmount) : 0,
+        depositAmount: formData.type === 'deposit'
+          ? (formData.paymentOption === 'delivery_note' ? 0 : Number(formData.depositAmount) || 0)
+          : 0,
         refillAmount: formData.type === 'refill' ? Number(formData.amount) : 0,
         returnAmount: formData.type === 'return' ? Number(formData.amount) : 0,
-        paymentMethod: formData.paymentMethod,
-        cashAmount: formData.paymentMethod === 'cash' ? Number(formData.cashAmount) : 0,
-        bankName: formData.paymentMethod === 'cheque' ? formData.bankName : undefined,
-        checkNumber: formData.paymentMethod === 'cheque' ? formData.checkNumber : undefined,
+        // Only include received via details when paymentOption is debit
+        paymentMethod: formData.paymentOption === 'debit' ? formData.paymentMethod : undefined,
+        cashAmount: formData.paymentOption === 'debit' && formData.paymentMethod === 'cash' ? Number(formData.cashAmount) : 0,
+        bankName: formData.paymentOption === 'debit' && formData.paymentMethod === 'cheque' ? formData.bankName : undefined,
+        checkNumber: formData.paymentOption === 'debit' && formData.paymentMethod === 'cheque' ? formData.checkNumber : undefined,
         status: formData.status,
         notes: formData.notes,
       }
@@ -508,6 +520,7 @@ export function CylinderManagement() {
       depositAmount: "" as any,
       refillAmount: "" as any,
       returnAmount: "" as any,
+      paymentOption: "debit" as any,
       paymentMethod: "cash" as "cash" | "cheque",
       cashAmount: "" as any,
       bankName: "",
@@ -534,6 +547,7 @@ export function CylinderManagement() {
       depositAmount: transaction.depositAmount || 0,
       refillAmount: transaction.refillAmount || 0,
       returnAmount: transaction.returnAmount || 0,
+      paymentOption: ((transaction as any).paymentOption || "debit") as any,
       paymentMethod: (transaction as any).paymentMethod || "cash",
       cashAmount: (transaction as any).cashAmount || 0,
       bankName: (transaction as any).bankName || "",
@@ -1094,29 +1108,51 @@ export function CylinderManagement() {
                 )}
               </div>
 
-              {/* Payment Method, Status, and Notes Section */}
+              {/* Payment Option, Received Via, Deposit Amount, Status, and Notes Section */}
               {formData.type !== 'refill' && (
                 <div className="space-y-4">
-                  {/* Payment Method */}
+                  {/* Payment Option */}
                   <div className="space-y-2">
-                    <Label htmlFor="paymentMethod">Security Type</Label>
+                    <Label htmlFor="paymentOption">Payment Option</Label>
                     <Select
-                      value={formData.paymentMethod}
-                      onValueChange={(value: 'cash' | 'cheque') =>
-                        setFormData({ ...formData, paymentMethod: value })
+                      value={formData.paymentOption}
+                      onValueChange={(value: 'debit' | 'credit' | 'delivery_note') =>
+                        setFormData({ ...formData, paymentOption: value })
                       }
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select payment method" />
+                        <SelectValue placeholder="Select payment option" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="cash">Cash</SelectItem>
-                        <SelectItem value="cheque">Cheque</SelectItem>
+                        <SelectItem value="debit">Debit</SelectItem>
+                        <SelectItem value="credit">Credit</SelectItem>
+                        <SelectItem value="delivery_note">Delivery Note</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
-                  {formData.paymentMethod === 'cash' && (
+                  {/* Received Via (only for debit) */}
+                  {formData.paymentOption === 'debit' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="paymentMethod">Received Via</Label>
+                      <Select
+                        value={formData.paymentMethod}
+                        onValueChange={(value: 'cash' | 'cheque') =>
+                          setFormData({ ...formData, paymentMethod: value })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select received via" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="cash">Cash</SelectItem>
+                          <SelectItem value="cheque">Cheque</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {formData.paymentOption === 'debit' && formData.paymentMethod === 'cash' && (
                     <div className="space-y-2">
                       <Label htmlFor="cashAmount">Security Cash</Label>
                       <Input
@@ -1133,7 +1169,7 @@ export function CylinderManagement() {
                     </div>
                   )}
 
-                  {formData.paymentMethod === 'cheque' && (
+                  {formData.paymentOption === 'debit' && formData.paymentMethod === 'cheque' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="bankName">Bank Name</Label>
@@ -1158,20 +1194,24 @@ export function CylinderManagement() {
                     </div>
                   )}
 
-                  {/* Status */}
-                  {(formData.type === 'deposit' || formData.type === 'return') && (
-                    <div className="space-y-2">
-                      <Label htmlFor="depositAmount">Deposit Amount</Label>
-                      <Input
-                        id="depositAmount"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={formData.depositAmount}
-                        onChange={(e) => setFormData({ ...formData, depositAmount: parseFloat(e.target.value) || 0 })}
-                      />
-                    </div>
-                  )}
+                  {/* Deposit Amount controlled by payment option (we are already inside non-refill block) */}
+                  <div className="space-y-2">
+                    <Label htmlFor="depositAmount">Deposit Amount</Label>
+                    <Input
+                      id="depositAmount"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.paymentOption === 'delivery_note' ? 0 : formData.depositAmount}
+                      onChange={(e) =>
+                        setFormData({ ...formData, depositAmount: parseFloat(e.target.value) || 0 })
+                      }
+                      disabled={formData.paymentOption === 'delivery_note'}
+                    />
+                    {formData.paymentOption === 'delivery_note' && (
+                      <p className="text-sm text-gray-500">Deposit amount is 0 for Delivery Note. Status will be set to Pending.</p>
+                    )}
+                  </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="status">Status</Label>

@@ -20,6 +20,7 @@ export function EmployeeDashboard({ user, setUnreadCount }: EmployeeDashboardPro
   const [loading, setLoading] = useState(true)
   const [notification, setNotification] = useState<{ message: string; visible: boolean }>({ message: "", visible: false })
   const [salesData, setSalesData] = useState<any[]>([])
+  const [cylinderTxns, setCylinderTxns] = useState<any[]>([])
   const [totalDebit, setTotalDebit] = useState(0)
   const [totalCredit, setTotalCredit] = useState(0)
 
@@ -43,10 +44,11 @@ export function EmployeeDashboard({ user, setUnreadCount }: EmployeeDashboardPro
 
   const fetchEmployeeData = async () => {
     try {
-      const [stockResponse, notificationsResponse, salesResponse] = await Promise.all([
+      const [stockResponse, notificationsResponse, salesResponse, empCylResponse] = await Promise.all([
         stockAPI.getAll(),
         notificationsAPI.getAll(user.id),
         fetch(`/api/employee-sales?employeeId=${user.id}`),
+        fetch(`/api/employee-cylinders?employeeId=${user.id}`),
       ])
 
       // Filter stock assignments for current employee
@@ -58,11 +60,13 @@ export function EmployeeDashboard({ user, setUnreadCount }: EmployeeDashboardPro
 
       // Fetch and process sales data
       const salesData = await salesResponse.json()
+      const cylData = await empCylResponse.json()
       
       // API returns sales directly as an array, not wrapped in data property
       const salesArray = Array.isArray(salesData) ? salesData : []
       
       setSalesData(salesArray)
+      setCylinderTxns(Array.isArray(cylData?.data) ? cylData.data : Array.isArray(cylData) ? cylData : [])
       
       // Calculate Debit (Total Amount) and Credit (Received Amount)
       const debit = salesArray.reduce((sum: number, sale: any) => sum + (sale.totalAmount || 0), 0)
@@ -76,6 +80,7 @@ export function EmployeeDashboard({ user, setUnreadCount }: EmployeeDashboardPro
       setAssignedStock([])
       setNotifications([])
       setSalesData([])
+      setCylinderTxns([])
       setTotalDebit(0)
       setTotalCredit(0)
       if (setUnreadCount) setUnreadCount(0)
@@ -155,6 +160,73 @@ export function EmployeeDashboard({ user, setUnreadCount }: EmployeeDashboardPro
   const totalRemainingQuantity = receivedStock.reduce((sum, stock) => sum + (stock.remainingQuantity || stock.quantity || 0), 0)
   
   const totalReturnedQuantity = returnedStock.reduce((sum, stock) => sum + (stock.quantity || 0), 0)
+
+  // Helpers to compute employee usage per product
+  const usageByProductFromGas = (productId: string) => {
+    try {
+      return salesData.reduce((sum: number, sale: any) => {
+        if (sale?.category !== 'gas') return sum
+        const items = Array.isArray(sale.items) ? sale.items : []
+        const used = items.reduce((s: number, it: any) => s + (it.product?._id === productId ? (Number(it.quantity) || 0) : 0), 0)
+        return sum + used
+      }, 0)
+    } catch {
+      return 0
+    }
+  }
+
+  const usageByProductFromCylinders = (productId: string, size?: string) => {
+    try {
+      return cylinderTxns.reduce((sum: number, t: any) => {
+        if (t?.product?._id !== productId) return sum
+        if (size && t?.cylinderSize && t.cylinderSize !== size) return sum
+        // Decrease for deposits (given out), increase back for returns
+        if (t.type === 'deposit') return sum + (Number(t.quantity) || 0)
+        if (t.type === 'return') return sum - (Number(t.quantity) || 0)
+        return sum
+      }, 0)
+    } catch {
+      return 0
+    }
+  }
+
+  const usageByProductFromCylinderSales = (productId: string, size?: string) => {
+    try {
+      return salesData.reduce((sum: number, sale: any) => {
+        if (sale?.category !== 'cylinder') return sum
+        const items = Array.isArray(sale.items) ? sale.items : []
+        const used = items.reduce((s: number, it: any) => {
+          const matchesProduct = it.product?._id === productId
+          const matchesSize = size ? (it.product?.cylinderType ? it.product.cylinderType === size : true) : true
+          return s + (matchesProduct && matchesSize ? (Number(it.quantity) || 0) : 0)
+        }, 0)
+        return sum + used
+      }, 0)
+    } catch {
+      return 0
+    }
+  }
+
+  const getAvailableForStock = (stock: any) => {
+    const baseQty = Number(stock.quantity) || 0
+    const productId = stock.product?._id
+    if (!productId) return baseQty
+    const category = stock.product?.category
+    if (category === 'gas') {
+      const used = usageByProductFromGas(productId)
+      const remaining = baseQty - used
+      return remaining < 0 ? 0 : remaining
+    }
+    if (category === 'cylinder') {
+      const size = stock.cylinderSize
+      const usedTxns = usageByProductFromCylinders(productId, size)
+      const usedSales = usageByProductFromCylinderSales(productId, size)
+      const netUsed = usedTxns + usedSales
+      const remaining = baseQty - netUsed
+      return remaining < 0 ? 0 : remaining
+    }
+    return baseQty
+  }
 
   if (loading) {
     return (
@@ -292,6 +364,7 @@ export function EmployeeDashboard({ user, setUnreadCount }: EmployeeDashboardPro
                     <TableHead>Product</TableHead>
                     <TableHead>Category</TableHead>
                     <TableHead>Quantity</TableHead>
+                    <TableHead>Available Quantity</TableHead>
                     <TableHead>Least Price (Assigned)</TableHead>
                     <TableHead>Received Date</TableHead>
                     <TableHead>Actions</TableHead>
@@ -303,6 +376,7 @@ export function EmployeeDashboard({ user, setUnreadCount }: EmployeeDashboardPro
                       <TableCell className="font-medium">{stock.product?.name || "Unknown Product"}</TableCell>
                       <TableCell>{stock.product?.category || "-"}</TableCell>
                       <TableCell>{stock.quantity}</TableCell>
+                      <TableCell>{getAvailableForStock(stock)}</TableCell>
                       <TableCell>{(() => {
                         const leastPrice = stock.leastPrice ?? stock.product?.leastPrice;
                         return leastPrice ? `AED ${leastPrice}` : <span className="text-gray-400">N/A</span>;
@@ -322,7 +396,7 @@ export function EmployeeDashboard({ user, setUnreadCount }: EmployeeDashboardPro
                   ))}
                   {receivedStock.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-gray-500 py-8">
+                      <TableCell colSpan={7} className="text-center text-gray-500 py-8">
                         No received stock assignments.
                       </TableCell>
                     </TableRow>
