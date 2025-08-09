@@ -78,3 +78,23 @@ export async function POST(request) {
     return NextResponse.json({ success: false, error: "Failed to create/update daily stock report" }, { status: 500 });
   }
 }
+
+export async function DELETE(req) {
+  try {
+    await dbConnect();
+    const { searchParams } = new URL(req.url);
+    const itemName = searchParams.get('itemName');
+    const date = searchParams.get('date');
+    if (!itemName || !date) {
+      return NextResponse.json({ error: 'itemName and date are required' }, { status: 400 });
+    }
+    const deleted = await DailyStockReport.findOneAndDelete({ itemName, date });
+    if (!deleted) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error('DELETE /daily-stock-reports error', err);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}

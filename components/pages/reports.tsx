@@ -139,6 +139,74 @@ export function Reports() {
   const [showDSRForm, setShowDSRForm] = useState(false)
   const [showDSRList, setShowDSRList] = useState(false)
   const [dsrEntries, setDsrEntries] = useState<DailyStockEntry[]>([])
+  // Download the current DSR list as PDF via browser print dialog
+  const downloadDsrPdf = () => {
+    try {
+      const rows = dsrEntries.map(e => `
+        <tr>
+          <td>${e.date || ''}</td>
+          <td>${e.itemName || ''}</td>
+          <td>${e.openingFull ?? ''}</td>
+          <td>${e.openingEmpty ?? ''}</td>
+          <td>${e.refilled ?? ''}</td>
+          <td>${e.cylinderSales ?? ''}</td>
+          <td>${e.gasSales ?? ''}</td>
+          <td>${typeof e.closingFull === 'number' ? e.closingFull : ''}</td>
+          <td>${typeof e.closingEmpty === 'number' ? e.closingEmpty : ''}</td>
+        </tr>
+      `).join('')
+
+      const html = `<!doctype html>
+      <html>
+        <head>
+          <meta charset=\"utf-8\" />
+          <title>Daily Stock Reports</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 16px; }
+            h1 { font-size: 18px; margin: 0 0 12px; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #ddd; padding: 6px 8px; font-size: 12px; }
+            th { background: #f7f7f7; text-align: left; }
+          </style>
+        </head>
+        <body>
+          <h1>Daily Stock Reports</h1>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Item</th>
+                <th>Opening Full</th>
+                <th>Opening Empty</th>
+                <th>Refilled</th>
+                <th>Cylinder Sales</th>
+                <th>Gas Sales</th>
+                <th>Closing Full</th>
+                <th>Closing Empty</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
+        </body>
+      </html>`
+
+      const w = window.open('', '_blank')
+      if (!w) {
+        alert('Please allow popups to download the PDF.')
+        return
+      }
+      w.document.write(html)
+      w.document.close()
+      w.focus()
+      w.print()
+      // Do not auto-close to allow user to re-print if needed
+    } catch (err) {
+      console.error(err)
+      alert('Failed to prepare PDF')
+    }
+  }
   const [dsrForm, setDsrForm] = useState({
     date: new Date().toISOString().slice(0, 10),
     itemName: "",
@@ -156,6 +224,122 @@ export function Reports() {
     closingFull: "",
     closingEmpty: "",
   })
+
+  // DSR inline edit state
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState<Record<string, string>>({
+    date: "",
+    itemName: "",
+    openingFull: "",
+    openingEmpty: "",
+    refilled: "",
+    cylinderSales: "",
+    gasSales: "",
+    closingFull: "",
+    closingEmpty: "",
+  })
+
+  const openEdit = (e: DailyStockEntry) => {
+    setEditingId(e.id)
+    setEditForm({
+      date: e.date,
+      itemName: e.itemName,
+      openingFull: String(e.openingFull ?? 0),
+      openingEmpty: String(e.openingEmpty ?? 0),
+      refilled: String(e.refilled ?? 0),
+      cylinderSales: String(e.cylinderSales ?? 0),
+      gasSales: String(e.gasSales ?? 0),
+      closingFull: e.closingFull !== undefined ? String(e.closingFull) : "",
+      closingEmpty: e.closingEmpty !== undefined ? String(e.closingEmpty) : "",
+    })
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+  }
+
+  const saveEdit = async () => {
+    if (!editingId) return
+    if (!editForm.itemName.trim()) return alert("Please enter item name")
+    const payload: any = {
+      date: editForm.date,
+      itemName: editForm.itemName.trim(),
+      openingFull: parseNum(editForm.openingFull),
+      openingEmpty: parseNum(editForm.openingEmpty),
+      refilled: parseNum(editForm.refilled),
+      cylinderSales: parseNum(editForm.cylinderSales),
+      gasSales: parseNum(editForm.gasSales),
+    }
+    if (editForm.closingFull !== "") payload.closingFull = parseNum(editForm.closingFull)
+    if (editForm.closingEmpty !== "") payload.closingEmpty = parseNum(editForm.closingEmpty)
+
+    try {
+      const res = await fetch(API_BASE, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) throw new Error("post failed")
+      const json = await res.json()
+      const d = json?.data || payload
+      const updated = dsrEntries.map(row =>
+        row.id === editingId
+          ? {
+              ...row,
+              date: payload.date,
+              itemName: payload.itemName,
+              openingFull: payload.openingFull,
+              openingEmpty: payload.openingEmpty,
+              refilled: payload.refilled,
+              cylinderSales: payload.cylinderSales,
+              gasSales: payload.gasSales,
+              closingFull: typeof d.closingFull === 'number' ? d.closingFull : row.closingFull,
+              closingEmpty: typeof d.closingEmpty === 'number' ? d.closingEmpty : row.closingEmpty,
+            }
+          : row
+      )
+      setDsrEntries(updated)
+      saveDsrLocal(updated)
+      setEditingId(null)
+    } catch (e) {
+      // Offline/local fallback
+      const updated = dsrEntries.map(row =>
+        row.id === editingId
+          ? {
+              ...row,
+              date: payload.date,
+              itemName: payload.itemName,
+              openingFull: payload.openingFull,
+              openingEmpty: payload.openingEmpty,
+              refilled: payload.refilled,
+              cylinderSales: payload.cylinderSales,
+              gasSales: payload.gasSales,
+              closingFull: payload.closingFull ?? row.closingFull,
+              closingEmpty: payload.closingEmpty ?? row.closingEmpty,
+            }
+          : row
+      )
+      setDsrEntries(updated)
+      saveDsrLocal(updated)
+      setEditingId(null)
+      alert("Saved locally (offline). Will sync when online.")
+    }
+  }
+
+  const deleteEntry = async (e: DailyStockEntry) => {
+    if (!confirm(`Delete DSR for ${e.itemName} on ${e.date}?`)) return
+    try {
+      const url = `${API_BASE}?itemName=${encodeURIComponent(e.itemName)}&date=${encodeURIComponent(e.date)}`
+      const res = await fetch(url, { method: 'DELETE' })
+      if (!res.ok) throw new Error('delete failed')
+    } catch (err) {
+      // proceed with local removal
+    } finally {
+      const updated = dsrEntries.filter(x => x.id !== e.id)
+      setDsrEntries(updated)
+      saveDsrLocal(updated)
+    }
+  }
 
   // Helpers: API endpoints + localStorage fallback
   const DSR_KEY = "daily_stock_reports"
@@ -1351,7 +1535,10 @@ export function Reports() {
           </DialogHeader>
           <div className="flex justify-between items-center mb-2">
             <div className="text-sm text-gray-600">Total entries: {dsrEntries.length}</div>
-            <Button variant="destructive" onClick={clearDsr}>Clear All</Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={downloadDsrPdf}>Download PDF</Button>
+              <Button variant="destructive" onClick={clearDsr}>Clear All</Button>
+            </div>
           </div>
           <div className="border rounded-lg overflow-x-auto">
             <Table>
@@ -1366,6 +1553,7 @@ export function Reports() {
                   <TableHead>Gas Sales</TableHead>
                   <TableHead>Closing Full</TableHead>
                   <TableHead>Closing Empty</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1379,33 +1567,75 @@ export function Reports() {
                   .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))
                   .map(e => (
                   <TableRow key={e.id}>
-                    <TableCell>{e.date}</TableCell>
-                    <TableCell className="font-medium">{e.itemName}</TableCell>
-                    <TableCell>{e.openingFull}</TableCell>
-                    <TableCell>{e.openingEmpty}</TableCell>
-                    <TableCell>{e.refilled}</TableCell>
-                    <TableCell>{e.cylinderSales}</TableCell>
-                    <TableCell>{e.gasSales}</TableCell>
-                    <TableCell className="font-semibold text-green-600">
-                      {(
-                        typeof e.closingFull === 'number' && typeof e.closingEmpty === 'number' &&
-                        !(e.closingFull === 0 && e.closingEmpty === 0)
-                      ) ? (
-                        e.closingFull
-                      ) : (
-                        <Button size="sm" onClick={() => openClosingDialog(e)}>Add Closing Stock</Button>
-                      )}
-                    </TableCell>
-                    <TableCell className="font-semibold text-blue-600">
-                      {(
-                        typeof e.closingFull === 'number' && typeof e.closingEmpty === 'number' &&
-                        !(e.closingFull === 0 && e.closingEmpty === 0)
-                      ) ? (
-                        e.closingEmpty
-                      ) : (
-                        <span className="text-gray-400">—</span>
-                      )}
-                    </TableCell>
+                    {editingId === e.id ? (
+                      <>
+                        <TableCell>
+                          <Input type="date" value={editForm.date} onChange={ev => setEditForm(prev => ({ ...prev, date: ev.target.value }))} className="h-8" />
+                        </TableCell>
+                        <TableCell>
+                          <Input value={editForm.itemName} onChange={ev => setEditForm(prev => ({ ...prev, itemName: ev.target.value }))} className="h-8" />
+                        </TableCell>
+                        <TableCell>
+                          <Input type="number" min={0} value={editForm.openingFull} onChange={ev => setEditForm(prev => ({ ...prev, openingFull: ev.target.value }))} className="h-8 w-24" />
+                        </TableCell>
+                        <TableCell>
+                          <Input type="number" min={0} value={editForm.openingEmpty} onChange={ev => setEditForm(prev => ({ ...prev, openingEmpty: ev.target.value }))} className="h-8 w-24" />
+                        </TableCell>
+                        <TableCell>
+                          <Input type="number" min={0} value={editForm.refilled} onChange={ev => setEditForm(prev => ({ ...prev, refilled: ev.target.value }))} className="h-8 w-24" />
+                        </TableCell>
+                        <TableCell>
+                          <Input type="number" min={0} value={editForm.cylinderSales} onChange={ev => setEditForm(prev => ({ ...prev, cylinderSales: ev.target.value }))} className="h-8 w-24" />
+                        </TableCell>
+                        <TableCell>
+                          <Input type="number" min={0} value={editForm.gasSales} onChange={ev => setEditForm(prev => ({ ...prev, gasSales: ev.target.value }))} className="h-8 w-24" />
+                        </TableCell>
+                        <TableCell>
+                          <Input type="number" min={0} value={editForm.closingFull} onChange={ev => setEditForm(prev => ({ ...prev, closingFull: ev.target.value }))} className="h-8 w-24" />
+                        </TableCell>
+                        <TableCell>
+                          <Input type="number" min={0} value={editForm.closingEmpty} onChange={ev => setEditForm(prev => ({ ...prev, closingEmpty: ev.target.value }))} className="h-8 w-24" />
+                        </TableCell>
+                        <TableCell className="space-x-2">
+                          <Button size="sm" onClick={saveEdit}>Save</Button>
+                          <Button size="sm" variant="outline" onClick={cancelEdit}>Cancel</Button>
+                        </TableCell>
+                      </>
+                    ) : (
+                      <>
+                        <TableCell>{e.date}</TableCell>
+                        <TableCell className="font-medium">{e.itemName}</TableCell>
+                        <TableCell>{e.openingFull}</TableCell>
+                        <TableCell>{e.openingEmpty}</TableCell>
+                        <TableCell>{e.refilled}</TableCell>
+                        <TableCell>{e.cylinderSales}</TableCell>
+                        <TableCell>{e.gasSales}</TableCell>
+                        <TableCell className="font-semibold text-green-600">
+                          {(
+                            typeof e.closingFull === 'number' && typeof e.closingEmpty === 'number' &&
+                            !(e.closingFull === 0 && e.closingEmpty === 0)
+                          ) ? (
+                            e.closingFull
+                          ) : (
+                            <Button size="sm" onClick={() => openClosingDialog(e)}>Add Closing Stock</Button>
+                          )}
+                        </TableCell>
+                        <TableCell className="font-semibold text-blue-600">
+                          {(
+                            typeof e.closingFull === 'number' && typeof e.closingEmpty === 'number' &&
+                            !(e.closingFull === 0 && e.closingEmpty === 0)
+                          ) ? (
+                            e.closingEmpty
+                          ) : (
+                            <span className="text-gray-400">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="space-x-2">
+                          <Button size="sm" variant="outline" onClick={() => openEdit(e)}>Edit</Button>
+                          <Button size="sm" variant="destructive" onClick={() => deleteEntry(e)}>Delete</Button>
+                        </TableCell>
+                      </>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
