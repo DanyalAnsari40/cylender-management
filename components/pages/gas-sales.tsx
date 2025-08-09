@@ -108,6 +108,7 @@ export function GasSales() {
     paymentMethod: "cash",
     paymentStatus: "cleared",
     receivedAmount: "",
+    paymentOption: "debit", // debit | credit | delivery_note
     notes: "",
   })
 
@@ -225,13 +226,31 @@ export function GasSales() {
 
       const totalAmount = saleItems.reduce((sum, item) => sum + item.total, 0)
 
+      // Derive final payment fields from paymentOption
+      let derivedPaymentMethod = formData.paymentMethod
+      let derivedPaymentStatus = formData.paymentStatus
+      let derivedReceivedAmount = parseFloat(formData.receivedAmount) || 0
+
+      if (formData.paymentOption === 'credit') {
+        derivedPaymentMethod = 'credit'
+        derivedPaymentStatus = 'pending'
+        // keep entered receivedAmount for partial credit payments
+      } else if (formData.paymentOption === 'delivery_note') {
+        derivedPaymentMethod = 'delivery_note'
+        derivedPaymentStatus = 'pending'
+        derivedReceivedAmount = 0
+      } else if (formData.paymentOption === 'debit') {
+        derivedPaymentMethod = 'debit'
+        // paymentStatus already auto-managed by amount input logic
+      }
+
       const saleData = {
         customer: formData.customerId,
         items: saleItems,
         totalAmount,
-        paymentMethod: formData.paymentMethod,
-        paymentStatus: formData.paymentStatus,
-        receivedAmount: parseFloat(formData.receivedAmount) || 0,
+        paymentMethod: derivedPaymentMethod,
+        paymentStatus: derivedPaymentStatus,
+        receivedAmount: derivedReceivedAmount,
         notes: formData.notes,
       }
 
@@ -273,6 +292,7 @@ export function GasSales() {
       paymentMethod: "cash",
       paymentStatus: "cleared",
       receivedAmount: "",
+      paymentOption: "debit",
       notes: "",
     })
     setCustomerSearchTerm("")
@@ -295,6 +315,13 @@ export function GasSales() {
       paymentMethod: sale.paymentMethod || "cash",
       paymentStatus: sale.paymentStatus || "cleared",
       receivedAmount: (sale as any).receivedAmount?.toString() || "",
+      paymentOption: (() => {
+        const pm = (sale as any).paymentMethod || "cash"
+        if (pm === "credit") return "credit"
+        if (pm === "delivery_note") return "delivery_note"
+        if (pm === "debit") return "debit"
+        return "debit"
+      })(),
       notes: sale.notes || "",
     })
     setCustomerSearchTerm(sale.customer?.name || "")
@@ -796,51 +823,143 @@ export function GasSales() {
                 </div>
               </div>
 
-              {/* Received Amount Section */}
-              <div className="space-y-2">
-                <Label htmlFor="receivedAmount">Received Amount (AED) *</Label>
-                <Input
-                  id="receivedAmount"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.receivedAmount}
-                  onChange={(e) => {
-                    const receivedAmount = e.target.value
-                    const receivedValue = parseFloat(receivedAmount) || 0
-                    
-                    // Auto-select status based on received amount vs total amount
-                    let newPaymentStatus = formData.paymentStatus
-                    if (receivedValue === totalAmount && totalAmount > 0) {
-                      newPaymentStatus = "cleared"
-                    } else if (receivedValue > 0 && receivedValue < totalAmount) {
-                      newPaymentStatus = "pending"
-                    } else if (receivedValue === 0) {
-                      newPaymentStatus = "pending"
+              {/* Payment Option / Received Amount Section */}
+              <div className="space-y-3">
+                <Label>Received Amount (AED) *</Label>
+                <Select
+                  value={formData.paymentOption}
+                  onValueChange={(value) => {
+                    // Update option and reset amount/notes accordingly
+                    const next = { ...formData, paymentOption: value as any }
+                    if (value === "delivery_note") {
+                      next.receivedAmount = "0"
+                      next.paymentStatus = "pending"
+                      next.paymentMethod = "delivery_note"
+                    } else if (value === "credit") {
+                      // Keep received amount editable for partial credit payments
+                      next.paymentMethod = "credit"
+                      next.paymentStatus = "pending"
                     }
-                    
-                    setFormData({ 
-                      ...formData, 
-                      receivedAmount: receivedAmount,
-                      paymentStatus: newPaymentStatus
-                    })
+                    if (value === "debit") {
+                      // Default to 0 and let user type amount
+                      next.paymentMethod = "debit"
+                    }
+                    setFormData(next)
                   }}
-                  placeholder="Enter received amount..."
-                  className="text-lg"
-                />
-                {formData.receivedAmount && (
-                  <div className="text-sm text-gray-600">
-                    {(() => {
-                      const receivedValue = parseFloat(formData.receivedAmount) || 0
-                      const remaining = totalAmount - receivedValue
-                      if (remaining > 0) {
-                        return `Remaining: AED ${remaining.toFixed(2)}`
-                      } else if (remaining < 0) {
-                        return `Excess: AED ${Math.abs(remaining).toFixed(2)}`
-                      } else {
-                        return "✓ Fully paid"
-                      }
-                    })()} 
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select option" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="credit">Credit</SelectItem>
+                    <SelectItem value="debit">Debit</SelectItem>
+                    <SelectItem value="delivery_note">Delivery Note</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {formData.paymentOption === "debit" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="receivedAmount">Debit Amount (AED)</Label>
+                    <Input
+                      id="receivedAmount"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.receivedAmount}
+                      onChange={(e) => {
+                        const receivedAmount = e.target.value
+                        const receivedValue = parseFloat(receivedAmount) || 0
+                        
+                        // Auto-select status based on received amount vs total amount
+                        let newPaymentStatus = formData.paymentStatus
+                        if (receivedValue === totalAmount && totalAmount > 0) {
+                          newPaymentStatus = "cleared"
+                        } else if (receivedValue > 0 && receivedValue < totalAmount) {
+                          newPaymentStatus = "pending"
+                        } else if (receivedValue === 0) {
+                          newPaymentStatus = "pending"
+                        }
+                        
+                        setFormData({ 
+                          ...formData, 
+                          receivedAmount: receivedAmount,
+                          paymentStatus: newPaymentStatus,
+                          paymentMethod: "debit",
+                        })
+                      }}
+                      placeholder="Enter debit amount..."
+                      className="text-lg"
+                    />
+                    {formData.receivedAmount && (
+                      <div className="text-sm text-gray-600">
+                        {(() => {
+                          const receivedValue = parseFloat(formData.receivedAmount) || 0
+                          const remaining = totalAmount - receivedValue
+                          if (remaining > 0) {
+                            return `Remaining: AED ${remaining.toFixed(2)}`
+                          } else if (remaining < 0) {
+                            return `Excess: AED ${Math.abs(remaining).toFixed(2)}`
+                          } else {
+                            return "✓ Fully paid"
+                          }
+                        })()} 
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {formData.paymentOption === "credit" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="creditReceived">Credit Received (AED)</Label>
+                    <Input
+                      id="creditReceived"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.receivedAmount}
+                      onChange={(e) => {
+                        const receivedAmount = e.target.value
+                        const receivedValue = parseFloat(receivedAmount) || 0
+                        // Auto-select status based on received amount vs total amount
+                        let newPaymentStatus = formData.paymentStatus
+                        if (receivedValue === totalAmount && totalAmount > 0) {
+                          newPaymentStatus = "cleared"
+                        } else if (receivedValue > 0 && receivedValue < totalAmount) {
+                          newPaymentStatus = "pending"
+                        } else if (receivedValue === 0) {
+                          newPaymentStatus = "pending"
+                        }
+                        setFormData({ 
+                          ...formData, 
+                          receivedAmount: receivedAmount,
+                          paymentStatus: newPaymentStatus,
+                          paymentMethod: "credit",
+                        })
+                      }}
+                      placeholder="Enter received amount for credit..."
+                      className="text-lg"
+                    />
+                    {formData.receivedAmount && (
+                      <div className="text-sm text-gray-600">
+                        {(() => {
+                          const receivedValue = parseFloat(formData.receivedAmount) || 0
+                          const remaining = totalAmount - receivedValue
+                          if (remaining > 0) {
+                            return `Remaining: AED ${remaining.toFixed(2)}`
+                          } else if (remaining < 0) {
+                            return `Excess: AED ${Math.abs(remaining).toFixed(2)}`
+                          } else {
+                            return "✓ Fully paid"
+                          }
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {formData.paymentOption === "delivery_note" && (
+                  <div className="space-y-2">
+                    <div className="text-sm text-gray-600">Only item and quantity are required. A delivery note will be generated.</div>
                   </div>
                 )}
               </div>

@@ -46,7 +46,7 @@ const EmployeeSaleSchema = new mongoose.Schema(
     },
     paymentMethod: {
       type: String,
-      enum: ["cash", "card", "bank_transfer", "credit"],
+      enum: ["cash", "card", "bank_transfer", "credit", "debit", "delivery_note"],
       default: "cash",
     },
     paymentStatus: {

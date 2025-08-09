@@ -1,21 +1,25 @@
 "use client"
 
-import { useState, useEffect, SVGProps } from "react"
+import { useState, useEffect } from "react"
+import type { SVGProps } from "react"
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu"
-import { salesAPI, customersAPI, productsAPI } from "@/lib/api"
+import { customersAPI } from "@/lib/api"
+
 import employeeSalesAPI from "@/utils/apis/employeeSalesAPI"
 import { ReceiptDialog } from '@/components/receipt-dialog';
 import { SignatureDialog } from '@/components/signature-dialog';
 import { ProductDropdown } from '@/components/ui/product-dropdown';
-import { Trash2 } from 'lucide-react';
+import { Trash2, MoveHorizontalIcon, SearchIcon } from 'lucide-react';
 
 interface EmployeeGasSalesProps {
   user: {
@@ -76,6 +80,7 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingSale, setEditingSale] = useState<Sale | null>(null)
+  const [priceAlert, setPriceAlert] = useState<{ message: string; index: number | null }>({ message: '', index: null })
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null)
   const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false)
@@ -97,6 +102,7 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
     receivedAmount: "",
     paymentMethod: "cash",
     paymentStatus: "cleared",
+    paymentOption: "debit", // debit | credit | delivery_note
     notes: "",
   })
 
@@ -184,6 +190,7 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
       receivedAmount: "",
       paymentMethod: "cash",
       paymentStatus: "cleared",
+      paymentOption: "debit",
       notes: "",
     })
     setCustomerSearchTerm("")
@@ -260,7 +267,7 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
   const addItem = () => {
     setFormData({
       ...formData,
-      items: [...formData.items, { productId: "", quantity: "", price: "" }]
+      items: [...formData.items, { productId: "", quantity: "1", price: "", category: formData.category || "gas" } as any]
     })
   }
 
@@ -271,10 +278,31 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
     }
   }
 
-  const updateItem = (index: number, field: string, value: string) => {
-    const newItems = [...formData.items]
-    newItems[index] = { ...newItems[index], [field]: value }
-    setFormData({ ...formData, items: newItems })
+  const updateItem = (index: number, field: string, value: any) => {
+    const newItems: any[] = [...(formData.items as any)]
+
+    if (field === 'category') {
+      newItems[index] = {
+        ...newItems[index],
+        category: value,
+        productId: '',
+        price: '',
+      }
+    } else if (field === 'productId') {
+      const itemCategory = newItems[index].category || formData.category || 'gas'
+      const categoryProducts = (allProducts || []).filter((p: Product) => p.category === itemCategory)
+      const product = categoryProducts.find((p: Product) => p._id === value)
+      newItems[index] = {
+        ...newItems[index],
+        productId: value,
+        quantity: '1',
+        price: product ? product.leastPrice.toString() : '',
+      }
+    } else {
+      newItems[index] = { ...newItems[index], [field]: value }
+    }
+
+    setFormData({ ...formData, items: newItems as any })
   }
 
 
@@ -312,15 +340,33 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
           price: parseFloat(item.price)
         }))
 
+      // Derive final payment fields from paymentOption
+      let derivedPaymentMethod = formData.paymentMethod || "cash"
+      let derivedPaymentStatus = formData.paymentStatus || "cleared"
+      let derivedReceivedAmount = parseFloat(formData.receivedAmount) || 0
+
+      if (formData.paymentOption === 'credit') {
+        derivedPaymentMethod = 'credit'
+        derivedPaymentStatus = 'pending'
+        // keep entered receivedAmount for partial credit payments
+      } else if (formData.paymentOption === 'delivery_note') {
+        derivedPaymentMethod = 'delivery_note'
+        derivedPaymentStatus = 'pending'
+        derivedReceivedAmount = 0
+      } else if (formData.paymentOption === 'debit') {
+        derivedPaymentMethod = 'debit'
+        // status already managed by amount comparison
+      }
+
       const saleData = {
         employeeId: user.id,  // API expects 'employeeId', not 'employee'
         customer: formData.customerId,
         items: transformedItems,
         totalAmount: totalAmount,
-        paymentMethod: formData.paymentMethod || "cash",
-        paymentStatus: formData.paymentStatus || "cleared",
+        paymentMethod: derivedPaymentMethod,
+        paymentStatus: derivedPaymentStatus,
         notes: formData.notes || "",
-        receivedAmount: parseFloat(formData.receivedAmount) || 0,
+        receivedAmount: derivedReceivedAmount,
       }
 
       console.log('Sending sale data to API:', saleData)
@@ -359,6 +405,13 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
       receivedAmount: sale.receivedAmount?.toString() || "",
       paymentMethod: sale.paymentMethod || "cash",
       paymentStatus: sale.paymentStatus,
+      paymentOption: (() => {
+        const pm = sale.paymentMethod || "cash"
+        if (pm === 'credit') return 'credit'
+        if (pm === 'delivery_note') return 'delivery_note'
+        if (pm === 'debit') return 'debit'
+        return 'debit'
+      })(),
       notes: sale.notes || "",
     })
     setCustomerSearchTerm(sale.customer.name)
@@ -373,7 +426,7 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
   const handleDeleteConfirm = async () => {
     if (!saleToDelete) return
     try {
-      await salesAPI.delete(`/employee-sales/${saleToDelete._id}`)
+      await employeeSalesAPI.delete(saleToDelete._id)
       fetchData()
       setIsDeleteDialogOpen(false)
       setSaleToDelete(null)
@@ -411,532 +464,398 @@ const [saleForSignature, setSaleForSignature] = useState<any | null>(null);
     }
   };
 
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(e.target.value)
-  }
-
-  const handleFilterChange = (value: string) => {
-    setStatusFilter(value)
-  }
-
-  const filteredSales = Array.isArray(sales) ? sales.filter(sale => {
-    const searchTermLower = searchTerm.toLowerCase()
-    const customerName = sale.customer?.name?.toLowerCase() || ''
-    const invoiceNumber = sale.invoiceNumber?.toLowerCase() || ''
-
-    const matchesSearch = customerName.includes(searchTermLower) || invoiceNumber.includes(searchTermLower)
-    const matchesStatus = statusFilter === "all" || sale.paymentStatus === statusFilter
-
-    return matchesSearch && matchesStatus
-  }) : []
+  // Derived filtered sales for table
+  const filteredSales = (sales || [])
+    .filter((s) => {
+      const matchesStatus =
+        statusFilter === "all" ? true : (s.paymentStatus || "").toLowerCase() === statusFilter.toLowerCase()
+      const term = (searchTerm || "").toLowerCase()
+      const matchesSearch =
+        !term ||
+        (s.invoiceNumber || "").toLowerCase().includes(term) ||
+        (s.customer?.name || "").toLowerCase().includes(term)
+      return matchesStatus && matchesSearch
+    })
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
   return (
-    <div className="flex flex-col h-full">
-      <header className="bg-gradient-to-r from-gray-800 to-gray-900 text-white py-6 px-4 md:px-6 rounded-t-lg">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Employee Gas Sales</h1>
-            <p className="text-gray-400">Manage your daily gas sales and transactions.</p>
-          </div>
-          <Dialog open={isDialogOpen} onOpenChange={(isOpen) => {
-            setIsDialogOpen(isOpen)
-            if (!isOpen) resetForm()
-          }}>
-            <DialogTrigger asChild>
-              <Button onClick={() => setIsDialogOpen(true)}>
-                <PlusIcon className="mr-2 h-4 w-4" />
-                New Sale
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>{editingSale ? "Edit Sale" : "Create New Sale"}</DialogTitle>
-                <DialogDescription>
-                  {editingSale ? "Update the details of the existing sale." : "Fill out the form to create a new gas sale."}
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="category">Category *</Label>
-                      <Select
-                        value={formData.category}
-                        onValueChange={(value) => {
-                          setFormData({ ...formData, category: value })
-                          // Always filter from latest allProducts
-                          const filteredProducts = allProducts.filter((product: Product) => product.category === value)
-                          setProducts(filteredProducts)
-                        }}
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold">Employee Gas Sales</h2>
+        <Button
+          onClick={() => {
+            resetForm()
+            setIsDialogOpen(true)
+          }}
+        >
+          <PlusIcon className="mr-2 h-4 w-4" /> New Sale
+        </Button>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="relative w-full sm:w-80">
+          <Input
+            placeholder="Search by invoice or customer"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-full sm:w-40">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All</SelectItem>
+            <SelectItem value="cleared">Cleared</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="overdue">Overdue</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Invoice</TableHead>
+                <TableHead>Customer</TableHead>
+                <TableHead className="text-right">Total (AED)</TableHead>
+                <TableHead className="text-right">Received</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredSales.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                    {loading ? "Loading..." : "No sales found"}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredSales.map((sale) => (
+                  <TableRow key={sale._id}>
+                    <TableCell className="font-medium">{sale.invoiceNumber}</TableCell>
+                    <TableCell>{sale.customer?.name || "-"}</TableCell>
+                    <TableCell className="text-right">{(sale.totalAmount || 0).toFixed(2)}</TableCell>
+                    <TableCell className="text-right">{(sale.receivedAmount || 0).toFixed(2)}</TableCell>
+                    <TableCell>{getPaymentStatusBadge(sale.paymentStatus)}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button size="sm" variant="outline" onClick={() => handleEdit(sale)}>
+                          Edit
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => handleViewReceipt(sale)}>
+                          Receipt
+                        </Button>
+                        <Button size="sm" variant="destructive" onClick={() => handleDeleteClick(sale)}>
+                          Delete
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Create / Edit Sale Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{editingSale ? "Edit Sale" : "Create Sale"}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Customer autocomplete */}
+            <div className="space-y-2">
+              <Label>Customer</Label>
+              <div className="relative">
+                <Input
+                  placeholder="Type to search customer"
+                  value={customerSearchTerm}
+                  onChange={(e) => handleCustomerSearchChange(e.target.value)}
+                  onFocus={() => setShowCustomerSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowCustomerSuggestions(false), 150)}
+                />
+                {showCustomerSuggestions && filteredCustomerSuggestions.length > 0 && (
+                  <div className="absolute z-50 mt-1 w-full rounded-md border bg-white shadow">
+                    {filteredCustomerSuggestions.map((c) => (
+                      <div
+                        key={c._id}
+                        className="cursor-pointer px-3 py-2 hover:bg-muted"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => handleCustomerSelect(c)}
                       >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select category" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="gas">Gas</SelectItem>
-                          <SelectItem value="cylinder">Cylinder</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div className="space-y-2 relative">
-                      <Label htmlFor="customer">Customer *</Label>
-                      <Input
-                        id="customer"
-                        placeholder="Search by name, phone, or email..."
-                        value={customerSearchTerm}
-                        onChange={(e) => handleCustomerSearchChange(e.target.value)}
-                        onFocus={() => customerSearchTerm && setShowCustomerSuggestions(true)}
-                        onBlur={() => setTimeout(() => setShowCustomerSuggestions(false), 200)}
-                        className="pr-10"
-                        required
-                      />
-                      {showCustomerSuggestions && filteredCustomerSuggestions.length > 0 && (
-                        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                          {filteredCustomerSuggestions.map((customer) => (
-                            <div
-                              key={customer._id}
-                              className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-                              onClick={() => handleCustomerSelect(customer)}
-                            >
-                              <div className="flex flex-col">
-                                <span className="font-medium text-gray-900">{customer.name}</span>
-                                <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
-                                  <span>Phone: {customer.phone}</span>
-                                  {customer.email && <span>Email: {customer.email}</span>}
-                                </div>
-                              </div>
-                            </div>
+                        <div className="font-medium">{c.name}</div>
+                        <div className="text-xs text-muted-foreground">{c.email || c.phone || ""}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Category moved to per-item selection below to match Admin UI */}
+
+            {/* Items */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label>Items</Label>
+                <Button type="button" variant="outline" size="sm" onClick={addItem}>
+                  Add Item
+                </Button>
+              </div>
+              {(formData.items as any[]).map((item: any, index: number) => (
+                <div key={index} className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                  {/* Category per item */}
+                  <div className="md:col-span-2">
+                    <Label>Category</Label>
+                    <Select
+                      value={item.category || formData.category || 'gas'}
+                      onValueChange={(value) => updateItem(index, 'category', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="gas">Gas</SelectItem>
+                        <SelectItem value="cylinder">Cylinder</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Product select filtered by category */}
+                  <div className="md:col-span-4">
+                    <Label>Product</Label>
+                    <Select
+                      value={item.productId}
+                      onValueChange={(productId) => {
+                        const itemCategory = (item.category || formData.category || 'gas') as any
+                        const categoryProducts = (allProducts || []).filter((p: Product) => p.category === itemCategory)
+                        const product = categoryProducts.find((p: Product) => p._id === productId)
+                        const updatedItems: any[] = [...(formData.items as any)]
+                        updatedItems[index] = {
+                          ...updatedItems[index],
+                          productId,
+                          price: product ? product.leastPrice.toString() : updatedItems[index].price,
+                        }
+                        setFormData({ ...formData, items: updatedItems as any })
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={`Select ${(item.category || formData.category || 'gas')}`} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(allProducts || [])
+                          .filter((p: Product) => p.category === (item.category || formData.category || 'gas'))
+                          .map((product) => (
+                            <SelectItem key={product._id} value={product._id}>
+                              {product.name}
+                            </SelectItem>
                           ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Quantity with stock check */}
+                  <div className="md:col-span-2">
+                    <Label>Quantity</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={item.quantity}
+                      onChange={(e) => {
+                        const enteredQuantity = parseInt(e.target.value) || 0
+                        const itemCategory = (item.category || formData.category || 'gas') as any
+                        const categoryProducts = (allProducts || []).filter((p: Product) => p.category === itemCategory)
+                        const product = categoryProducts.find((p: Product) => p._id === item.productId)
+                        if (product && enteredQuantity > product.currentStock) {
+                          setStockErrorMessage(`Insufficient stock for ${product.name}. Available: ${product.currentStock}, Required: ${enteredQuantity}`)
+                          setShowStockInsufficientPopup(true)
+                          setTimeout(() => setShowStockInsufficientPopup(false), 2000)
+                          return
+                        }
+                        updateItem(index, 'quantity', e.target.value)
+                      }}
+                    />
+                  </div>
+
+                  {/* Price with min price alert */}
+                  <div className="md:col-span-3">
+                    <Label>Price (AED) - Editable</Label>
+                    <div className="relative">
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={item.price}
+                        onChange={(e) => {
+                          const productsByCat = (allProducts || []).filter((p: Product) => p.category === (item.category || formData.category || 'gas'))
+                          const product = productsByCat.find((p: Product) => p._id === item.productId)
+                          const enteredPrice = parseFloat(e.target.value)
+                          if (product && enteredPrice < product.leastPrice) {
+                            setPriceAlert({ message: `Price must be at least ${product.leastPrice.toFixed(2)}`, index })
+                            setTimeout(() => setPriceAlert({ message: '', index: null }), 2000)
+                          }
+                          updateItem(index, 'price', e.target.value)
+                        }}
+                        placeholder={(() => {
+                          const productsByCat = (allProducts || []).filter((p: Product) => p.category === (item.category || formData.category || 'gas'))
+                          const product = productsByCat.find((p: Product) => p._id === item.productId)
+                          return product?.leastPrice ? `Min: AED ${product.leastPrice.toFixed(2)}` : 'Select product first'
+                        })()}
+                        className="w-full h-10 sm:h-11"
+                      />
+                      {priceAlert.index === index && priceAlert.message && (
+                        <div className="absolute top-full mt-1 text-xs text-red-500 bg-white p-1 rounded shadow-lg z-10">
+                          {priceAlert.message}
                         </div>
                       )}
                     </div>
                   </div>
 
-                  {/* Items Section */}
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-lg font-semibold">Items</Label>
-                      <Button type="button" onClick={addItem} variant="outline" size="sm">
-                        <PlusIcon className="w-4 h-4 mr-2" />
-                        Add Item
-                      </Button>
-                    </div>
-
-                    <div className="space-y-3">
-                      {formData.items.map((item, index) => (
-                        <div key={index} className="grid grid-cols-1 md:grid-cols-4 gap-3 p-4 border rounded-lg">
-                          <div className="space-y-2">
-                            <Label>Product</Label>
-                            {products.length === 0 ? (
-                              <div className="text-sm text-red-500 py-2">No products assigned for this category. Please check your inventory.</div>
-                            ) : (
-                              <ProductDropdown
-                                selectedProductId={item.productId}
-                                onSelect={(productId) => {
-                                  const product = products.find((p: Product) => p._id === productId)
-                                  const updatedItems = [...formData.items]
-                                  // Defensive: If product is not found or productId is invalid, set price to '' and do not crash
-                                  if (!product || productId === 'no-products' || typeof product.leastPrice !== 'number') {
-                                    console.warn('Selected product not found or invalid:', productId)
-                                    updatedItems[index] = {
-                                      ...updatedItems[index],
-                                      productId: productId,
-                                      price: ''
-                                    }
-                                  } else {
-                                    updatedItems[index] = {
-                                      ...updatedItems[index],
-                                      productId: productId,
-                                      price: product.leastPrice.toString()
-                                    }
-                                  }
-                                  setFormData({ ...formData, items: updatedItems })
-                                }}
-                                categoryFilter={formData.category}
-                                placeholder={`Select ${formData.category} product`}
-                                products={products}
-                              />
-                            )}
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label>Quantity</Label>
-                            <Input
-                              type="number"
-                              min="1"
-                              value={item.quantity}
-                              onChange={(e) => {
-                                const enteredQuantity = parseInt(e.target.value) || 0
-                                const product = products.find((p: Product) => p._id === item.productId)
-                                
-                                // Check stock availability in real-time
-                                if (product && enteredQuantity > product.currentStock) {
-                                  setStockErrorMessage(`Insufficient stock for ${product.name}. Available: ${product.currentStock}, Required: ${enteredQuantity}`)
-                                  setShowStockInsufficientPopup(true)
-                                  
-                                  // Auto-hide popup after 2 seconds
-                                  setTimeout(() => {
-                                    setShowStockInsufficientPopup(false)
-                                  }, 2000)
-                                  
-                                  return // Don't update the quantity if stock is insufficient
-                                }
-                                
-                                updateItem(index, "quantity", e.target.value)
-                              }}
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label>Price (AED) - Editable</Label>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={item.price}
-                              onChange={(e) => {
-                                const product = products.find((p: Product) => p._id === item.productId)
-                                const enteredPrice = parseFloat(e.target.value)
-                                
-                                if (product && enteredPrice < product.leastPrice) {
-                                  setValidationMessage(`Enter Greater than or equal to Least Price (AED ${product.leastPrice.toFixed(2)})`)
-                                  setShowPriceValidationPopup(true)
-                                  return
-                                }
-                                
-                                updateItem(index, "price", e.target.value)
-                              }}
-                              placeholder={(() => {
-                                const product = products.find((p: Product) => p._id === item.productId)
-                                return product?.leastPrice ? `Min: AED ${product.leastPrice.toFixed(2)}` : 'Select product first'
-                              })()}
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label>Total (AED)</Label>
-                            <div className="flex items-center gap-2">
-                              <Input value={(() => {
-                                const price = parseFloat(item.price) || 0
-                                const quantity = Number(item.quantity) || 0
-                                return `AED ${(price * quantity).toFixed(2)}`
-                              })()} disabled />
-                              {formData.items.length > 1 && (
-                                <Button
-                                  type="button"
-                                  onClick={() => removeItem(index)}
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-red-600 hover:text-red-700"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="text-right">
-                      <div className="text-2xl font-bold text-[#2B3068]">Total: AED {calculateTotalAmount().toFixed(2)}</div>
+                  {/* Total and remove */}
+                  <div className="md:col-span-1 flex items-end">
+                    <div className="w-full text-right text-sm font-medium">
+                      AED {(() => { const p = parseFloat(item.price)||0; const q = parseFloat(item.quantity)||0; return (p*q).toFixed(2) })()}
                     </div>
                   </div>
 
-                  {/* Received Amount Section */}
-                  <div className="space-y-2">
-                    <Label htmlFor="receivedAmount">Received Amount (AED) *</Label>
-                    <Input
-                      id="receivedAmount"
-                      name="receivedAmount"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formData.receivedAmount}
-                      onChange={(e) => {
-                        const receivedAmount = e.target.value
-                        const receivedValue = parseFloat(receivedAmount) || 0
-                        const totalAmount = calculateTotalAmount()
-                        
-                        // Auto-select status based on received amount vs total amount
-                        let newPaymentStatus = formData.paymentStatus
-                        if (receivedValue === totalAmount && totalAmount > 0) {
-                          newPaymentStatus = "cleared"
-                        } else if (receivedValue > 0 && receivedValue < totalAmount) {
-                          newPaymentStatus = "pending"
-                        } else if (receivedValue === 0) {
-                          newPaymentStatus = "pending"
-                        }
-                        
-                        setFormData({ 
-                          ...formData, 
-                          receivedAmount: receivedAmount,
-                          paymentStatus: newPaymentStatus
-                        })
-                      }}
-                      placeholder="Enter received amount..."
-                      className="text-lg"
-                    />
-                    {formData.receivedAmount && (
-                      <div className="text-sm text-gray-600">
-                        {(() => {
-                          const receivedValue = parseFloat(formData.receivedAmount) || 0
-                          const totalAmount = calculateTotalAmount()
-                          const remaining = totalAmount - receivedValue
-                          if (remaining > 0) {
-                            return `Remaining: AED ${remaining.toFixed(2)}`
-                          } else if (remaining < 0) {
-                            return `Excess: AED ${Math.abs(remaining).toFixed(2)}`
-                          } else {
-                            return "✓ Fully paid"
-                          }
-                        })()} 
-                      </div>
+                  <div className="md:col-span-12 flex items-center justify-end">
+                    {formData.items.length > 1 && (
+                      <Button type="button" variant="outline" size="sm" onClick={() => removeItem(index)} className="text-red-600">
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     )}
                   </div>
-                  <div className="space-y-2">
-                      <Label htmlFor="paymentStatus">Payment Status</Label>
-                      <Select
-                        value={formData.paymentStatus}
-                        onValueChange={(value) => setFormData({ ...formData, paymentStatus: value })}
-                        disabled
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="cleared">Cleared</SelectItem>
-                          <SelectItem value="pending">Pending</SelectItem>
-                          <SelectItem value="overdue">Overdue</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  {/* Notes Field */}
-                  <div className="space-y-2">
-                    <Label htmlFor="notes">Notes</Label>
-                    <Input
-                      id="notes"
-                      placeholder="Add any relevant notes"
-                      value={formData.notes}
-                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    />
-                  </div>
                 </div>
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                  <Button type="submit">{editingSale ? "Save Changes" : "Create Sale"}</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>
-        <div className="mt-6 flex items-center justify-between">
-          <div className="relative w-full max-w-md">
-            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-            <Input
-              type="search"
-              placeholder="Search by invoice or customer..."
-              className="pl-10 w-full bg-gray-800 border-gray-700 focus:border-gray-500"
-              value={searchTerm}
-              onChange={handleSearchChange}
-            />
-          </div>
-          <div className="flex items-center gap-4">
-            <Label htmlFor="status-filter" className="text-sm font-medium">Status:</Label>
-            <Select value={statusFilter} onValueChange={handleFilterChange}>
-              <SelectTrigger className="w-[150px] bg-gray-800 border-gray-700 focus:border-gray-500">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="cleared">Cleared</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="overdue">Overdue</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </header>
-      <main className="flex-1 overflow-auto p-4 md:p-6">
-        <Card>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Invoice #</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Total Amount</TableHead>
-                  <TableHead>Received Amount</TableHead>
-                  <TableHead>Payment</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center text-gray-500 py-8">
-                      <div className="flex justify-center items-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : filteredSales.length > 0 ? (
-                  filteredSales.map((sale) => (
-                    <TableRow key={sale._id}>
-                      <TableCell className="font-medium">{sale.invoiceNumber}</TableCell>
-                      <TableCell>{sale.customer.name}</TableCell>
-                      <TableCell>AED {sale.totalAmount.toFixed(2)}</TableCell>
-                      <TableCell>AED {(sale.receivedAmount || 0).toFixed(2)}</TableCell>
-                      <TableCell className="capitalize">{sale.paymentMethod}</TableCell>
-                      <TableCell>{getPaymentStatusBadge(sale.paymentStatus)}</TableCell>
-                      <TableCell>{new Date(sale.createdAt).toLocaleDateString()}</TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoveHorizontalIcon className="h-4 w-4" />
-                              <span className="sr-only">Actions</span>
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleViewReceipt(sale)}>View Receipt</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleEdit(sale)}>Edit</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDeleteClick(sale)} className="text-red-500">Delete</DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center text-gray-500 py-8">
-                      No sales found. Create your first sale to get started.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      </main>
+              ))}
+            </div>
 
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Are you sure?</DialogTitle>
-            <DialogDescription>
-              This action cannot be undone. This will permanently delete the sale record.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDeleteConfirm}>Delete</Button>
-          </DialogFooter>
+            {/* Payment Option / Received Amount Section */}
+            <div className="space-y-3">
+              <Label>Received Amount (AED) *</Label>
+              <Select
+                value={formData.paymentOption}
+                onValueChange={(value) => {
+                  const next: any = { ...formData, paymentOption: value as any }
+                  if (value === 'delivery_note') {
+                    next.receivedAmount = '0'
+                    next.paymentStatus = 'pending'
+                    next.paymentMethod = 'delivery_note'
+                  } else if (value === 'credit') {
+                    // Keep existing receivedAmount editable for partial credit payments
+                    next.paymentMethod = 'credit'
+                    next.paymentStatus = 'pending'
+                  } else if (value === 'debit') {
+                    next.paymentMethod = 'debit'
+                  }
+                  setFormData(next)
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select option" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="credit">Credit</SelectItem>
+                  <SelectItem value="debit">Debit</SelectItem>
+                  <SelectItem value="delivery_note">Delivery Note</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {formData.paymentOption === 'debit' && (
+                <div className="space-y-2">
+                  <Label htmlFor="receivedAmount">Debit Amount (AED)</Label>
+                  <Input
+                    id="receivedAmount"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.receivedAmount}
+                    onChange={(e) => {
+                      const receivedAmount = e.target.value
+                      const receivedValue = parseFloat(receivedAmount) || 0
+                      const totalAmount = calculateTotalAmount()
+                      let newPaymentStatus = formData.paymentStatus
+                      if (receivedValue === totalAmount && totalAmount > 0) newPaymentStatus = 'cleared'
+                      else if (receivedValue > 0 && receivedValue < totalAmount) newPaymentStatus = 'pending'
+                      else if (receivedValue === 0) newPaymentStatus = 'pending'
+                      setFormData({ ...formData, receivedAmount, paymentStatus: newPaymentStatus, paymentMethod: 'debit' })
+                    }}
+                    className="text-lg"
+                  />
+                  {formData.receivedAmount && (
+                    <div className="text-sm text-gray-600">
+                      {(() => { const rv = parseFloat(formData.receivedAmount)||0; const rem = calculateTotalAmount() - rv; if(rem>0){return `Remaining: AED ${rem.toFixed(2)}`} else if(rem<0){return `Excess: AED ${Math.abs(rem).toFixed(2)}`} else {return '✓ Fully paid'} })()}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {formData.paymentOption === 'credit' && (
+                <div className="space-y-2">
+                  <Label htmlFor="creditReceived">Credit Received (AED)</Label>
+                  <Input
+                    id="creditReceived"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.receivedAmount}
+                    onChange={(e) => {
+                      const receivedAmount = e.target.value
+                      const receivedValue = parseFloat(receivedAmount) || 0
+                      const totalAmount = calculateTotalAmount()
+                      let newPaymentStatus = formData.paymentStatus
+                      if (receivedValue === totalAmount && totalAmount > 0) newPaymentStatus = 'cleared'
+                      else if (receivedValue > 0 && receivedValue < totalAmount) newPaymentStatus = 'pending'
+                      else if (receivedValue === 0) newPaymentStatus = 'pending'
+                      setFormData({ ...formData, receivedAmount, paymentStatus: newPaymentStatus, paymentMethod: 'credit' })
+                    }}
+                    placeholder="Enter received amount for credit..."
+                    className="text-lg"
+                  />
+                  {formData.receivedAmount && (
+                    <div className="text-sm text-gray-600">
+                      {(() => { const rv = parseFloat(formData.receivedAmount)||0; const rem = calculateTotalAmount() - rv; if(rem>0){return `Remaining: AED ${rem.toFixed(2)}`} else if(rem<0){return `Excess: AED ${Math.abs(rem).toFixed(2)}`} else {return '✓ Fully paid'} })()}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {formData.paymentOption === 'delivery_note' && (
+                <div className="space-y-2">
+                  <div className="text-sm text-gray-600">Only item and quantity are required. A delivery note will be generated.</div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">{editingSale ? "Update" : "Save"}</Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
 
-      {/* Signature Dialog */}
-      {isSignatureDialogOpen && saleForSignature && (
-        <SignatureDialog
-          isOpen={isSignatureDialogOpen}
-          onClose={() => setIsSignatureDialogOpen(false)}
-          onSignatureComplete={handleSignatureComplete}
-          customerName={saleForSignature.customer.name}
-        />
-      )}
-
-      {/* Receipt Dialog */}
-      {saleForReceipt && (
+      {/* Signature and Receipt Flow */}
+      <SignatureDialog
+        isOpen={isSignatureDialogOpen}
+        onClose={() => setIsSignatureDialogOpen(false)}
+        onSignatureComplete={handleSignatureComplete}
+      />
+      {isReceiptDialogOpen && saleForReceipt && (
         <ReceiptDialog
-          onClose={() => {
-            setIsReceiptDialogOpen(false);
-            setSaleForReceipt(null);
-          }}
+          onClose={() => setIsReceiptDialogOpen(false)}
           sale={saleForReceipt}
         />
       )}
-
-
-
-      {/* Stock Validation Popup */}
-      {showStockInsufficientPopup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" />
-          <div className="relative bg-white rounded-2xl shadow-2xl p-8 mx-4 max-w-md w-full transform transition-all duration-300 scale-100 animate-in fade-in-0 zoom-in-95">
-            <div className="flex flex-col items-center text-center space-y-4">
-              <div className="w-16 h-16 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Stock Alert!</h3>
-                <p className="text-gray-600">{stockErrorMessage}</p>
-              </div>
-              <Button 
-                onClick={() => setShowStockInsufficientPopup(false)}
-                className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-6 py-2 rounded-lg font-medium transition-all duration-200 hover:scale-105"
-              >
-                Got It
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Price Validation Popup */}
-      {showPriceValidationPopup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={() => setShowPriceValidationPopup(false)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl p-8 mx-4 max-w-md w-full transform transition-all duration-300 scale-100 animate-in fade-in-0 zoom-in-95">
-            <div className="flex flex-col items-center text-center space-y-4">
-              <div className="w-16 h-16 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Price Validation</h3>
-                <p className="text-gray-600">{validationMessage}</p>
-              </div>
-              <Button 
-                onClick={() => setShowPriceValidationPopup(false)}
-                className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-6 py-2 rounded-lg font-medium transition-all duration-200 hover:scale-105"
-              >
-                Got It
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
-}
-
-function MoveHorizontalIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="18 8 22 12 18 16" />
-      <polyline points="6 8 2 12 6 16" />
-      <line x1="2" x2="22" y1="12" y2="12" />
-    </svg>
-  )
-}
 
 function PlusIcon(props: SVGProps<SVGSVGElement>) {
   return (
@@ -958,23 +877,4 @@ function PlusIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
-function SearchIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="11" cy="11" r="8" />
-      <path d="m21 21-4.3-4.3" />
-    </svg>
-  )
 }
-

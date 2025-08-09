@@ -46,10 +46,18 @@ export function ReceiptDialog({ sale, signature, onClose }: ReceiptDialogProps) 
     }
   }, [])
 
-  // Calculate subtotal from items
-  const subtotal = sale.items.reduce((sum, item) => {
-    return sum + (item.total || (item.price * item.quantity));
-  }, 0);
+  // Calculate subtotal from items (with safe fallbacks)
+  const itemsSafe = Array.isArray(sale?.items) ? sale.items : []
+  const subtotal = itemsSafe.reduce((sum, item) => {
+    const priceNum = Number(item?.price || 0)
+    const qtyNum = Number(item?.quantity || 0)
+    const totalNum = Number(
+      item && typeof item.total === 'number'
+        ? item.total
+        : priceNum * qtyNum
+    )
+    return sum + (isFinite(totalNum) ? totalNum : 0)
+  }, 0)
   const vatAmount = subtotal * 0.05;
   const totalWithVat = subtotal + vatAmount;
   // Use signature from sale object if available, otherwise use signature prop
@@ -325,13 +333,13 @@ export function ReceiptDialog({ sale, signature, onClose }: ReceiptDialogProps) 
               <h3 className="font-semibold text-[#2B3068] mb-2">Invoice Information</h3>
               <div className="space-y-1 text-sm">
                 <div>
-                  <strong>Invoice #:</strong> {sale.invoiceNumber}
+                  <strong>Invoice #:</strong> {sale?.invoiceNumber || '-'}
                 </div>
                 <div>
-                  <strong>Date:</strong> {new Date(sale.createdAt).toLocaleDateString()}
+                  <strong>Date:</strong> {sale?.createdAt ? new Date(sale.createdAt).toLocaleDateString() : '-'}
                 </div>
                 <div>
-                  <strong>Time:</strong> {new Date(sale.createdAt).toLocaleTimeString()}
+                  <strong>Time:</strong> {sale?.createdAt ? new Date(sale.createdAt).toLocaleTimeString() : '-'}
                 </div>
               </div>
             </div>
@@ -340,13 +348,13 @@ export function ReceiptDialog({ sale, signature, onClose }: ReceiptDialogProps) 
               <h3 className="font-semibold text-[#2B3068] mb-2">Customer Information</h3>
               <div className="space-y-1 text-sm">
                 <div>
-                  <strong>Name:</strong> {sale.customer.name}
+                  <strong>Name:</strong> {sale?.customer?.name || '-'}
                 </div>
                 <div>
-                  <strong>Phone:</strong> {sale.customer.phone}
+                  <strong>Phone:</strong> {sale?.customer?.phone || '-'}
                 </div>
                 <div>
-                  <strong>Address:</strong> {sale.customer.address}
+                  <strong>Address:</strong> {sale?.customer?.address || '-'}
                 </div>
               </div>
             </div>
@@ -368,14 +376,22 @@ export function ReceiptDialog({ sale, signature, onClose }: ReceiptDialogProps) 
                   </tr>
                 </thead>
                 <tbody>
-                  {sale.items.map((item, index) => (
+                  {itemsSafe.map((item, index) => {
+                    const name = item?.product?.name || '-'
+                    const priceNum = Number(item?.price || 0)
+                    const qtyNum = Number(item?.quantity || 0)
+                    const totalNum = Number(
+                      typeof item?.total === 'number' ? item.total : priceNum * qtyNum
+                    )
+                    return (
                     <tr key={index} className="border-b">
-                      <td className="p-3 border">{item.product.name}</td>
-                      <td className="text-center p-3 border">{item.quantity}</td>
-                      <td className="text-right p-3 border">AED {item.price.toFixed(2)}</td>
-                      <td className="text-right p-3 border">AED {item.total.toFixed(2)}</td>
+                      <td className="p-3 border">{name}</td>
+                      <td className="text-center p-3 border">{qtyNum}</td>
+                      <td className="text-right p-3 border">AED {priceNum.toFixed(2)}</td>
+                      <td className="text-right p-3 border">AED {totalNum.toFixed(2)}</td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -403,8 +419,8 @@ export function ReceiptDialog({ sale, signature, onClose }: ReceiptDialogProps) 
             </table>
             <div className="flex justify-end text-sm mt-4">
               <div className="text-right">
-                <div>Payment Method: {sale.paymentMethod.toUpperCase()}</div>
-                <div>Status: {sale.paymentStatus.toUpperCase()}</div>
+                <div>Payment Method: {(sale?.paymentMethod || '-').toUpperCase()}</div>
+                <div>Status: {(sale?.paymentStatus || '-').toUpperCase()}</div>
               </div>
             </div>
           </div>
