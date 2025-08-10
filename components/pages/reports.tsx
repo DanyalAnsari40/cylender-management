@@ -1482,7 +1482,7 @@ export function Reports() {
 
       {/* DSR Form Dialog */}
       <Dialog open={showDSRForm} onOpenChange={setShowDSRForm}>
-        <DialogContent className="w-[95vw] max-w-[700px] p-4 sm:p-6 rounded-lg">
+        <DialogContent className="w-[95vw] max-w-[600px] sm:max-w-[700px] max-h-[85vh] overflow-y-auto p-4 sm:p-6 rounded-lg">
           <DialogHeader>
             <DialogTitle>Daily Stock Report</DialogTitle>
           </DialogHeader>
