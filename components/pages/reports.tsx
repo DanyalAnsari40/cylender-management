@@ -1482,62 +1482,62 @@ export function Reports() {
 
       {/* DSR Form Dialog */}
       <Dialog open={showDSRForm} onOpenChange={setShowDSRForm}>
-        <DialogContent className="max-w-[700px]">
+        <DialogContent className="w-[95vw] max-w-[700px] p-4 sm:p-6 rounded-lg">
           <DialogHeader>
             <DialogTitle>Daily Stock Report</DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div className="space-y-2">
               <Label>Date</Label>
-              <Input type="date" value={dsrForm.date} onChange={e => handleDsrChange("date", e.target.value)} />
+              <Input className="w-full" type="date" value={dsrForm.date} onChange={e => handleDsrChange("date", e.target.value)} />
             </div>
             <div className="space-y-2 sm:col-span-2">
               <Label>Item Name</Label>
-              <Input placeholder="e.g., 5kg Cylinder" value={dsrForm.itemName} onChange={e => handleDsrChange("itemName", e.target.value)} />
+              <Input className="w-full" placeholder="e.g., 5kg Cylinder" value={dsrForm.itemName} onChange={e => handleDsrChange("itemName", e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>Opening Full</Label>
-              <Input type="number" min={0} value={dsrForm.openingFull} onChange={e => handleDsrChange("openingFull", e.target.value)} />
+              <Input className="w-full" type="number" min={0} value={dsrForm.openingFull} onChange={e => handleDsrChange("openingFull", e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>Opening Empty</Label>
-              <Input type="number" min={0} value={dsrForm.openingEmpty} onChange={e => handleDsrChange("openingEmpty", e.target.value)} />
+              <Input className="w-full" type="number" min={0} value={dsrForm.openingEmpty} onChange={e => handleDsrChange("openingEmpty", e.target.value)} />
             </div>
             <div className="sm:col-span-2 pt-1">
               <Label className="text-xs uppercase text-gray-500">During the day</Label>
             </div>
             <div className="space-y-2">
               <Label>Refilled</Label>
-              <Input type="number" min={0} value={dsrForm.refilled} onChange={e => handleDsrChange("refilled", e.target.value)} />
+              <Input className="w-full" type="number" min={0} value={dsrForm.refilled} onChange={e => handleDsrChange("refilled", e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>Cylinder Sales</Label>
-              <Input type="number" min={0} value={dsrForm.cylinderSales} onChange={e => handleDsrChange("cylinderSales", e.target.value)} />
+              <Input className="w-full" type="number" min={0} value={dsrForm.cylinderSales} onChange={e => handleDsrChange("cylinderSales", e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>Gas Sales</Label>
-              <Input type="number" min={0} value={dsrForm.gasSales} onChange={e => handleDsrChange("gasSales", e.target.value)} />
+              <Input className="w-full" type="number" min={0} value={dsrForm.gasSales} onChange={e => handleDsrChange("gasSales", e.target.value)} />
             </div>
             {/* Closing stock is now captured via table action, not here */}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDSRForm(false)}>Cancel</Button>
-            <Button style={{ backgroundColor: "#2B3068" }} onClick={handleDsrSubmit}>Save</Button>
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+            <Button className="w-full sm:w-auto" variant="outline" onClick={() => setShowDSRForm(false)}>Cancel</Button>
+            <Button className="w-full sm:w-auto" style={{ backgroundColor: "#2B3068" }} onClick={handleDsrSubmit}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* DSR List Dialog */}
       <Dialog open={showDSRList} onOpenChange={setShowDSRList}>
-        <DialogContent className="max-w-[900px]">
+        <DialogContent className="w-[95vw] max-w-[900px] p-3 sm:p-6 rounded-lg">
           <DialogHeader>
             <DialogTitle>Daily Stock Reports</DialogTitle>
           </DialogHeader>
-          <div className="flex justify-between items-center mb-2">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-2">
             <div className="text-sm text-gray-600">Total entries: {dsrEntries.length}</div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={downloadDsrPdf}>Download PDF</Button>
-              <Button variant="destructive" onClick={clearDsr}>Clear All</Button>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+              <Button className="w-full sm:w-auto" variant="outline" onClick={downloadDsrPdf}>Download PDF</Button>
+              <Button className="w-full sm:w-auto" variant="destructive" onClick={clearDsr}>Clear All</Button>
             </div>
           </div>
           <div className="border rounded-lg overflow-x-auto">
