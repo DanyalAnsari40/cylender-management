@@ -366,20 +366,32 @@ export function ProductManagement() {
             </Table>
           </div>
 
-          {/* Mobile Card View */}
-          <div className="lg:hidden">
-            {filteredProducts.length > 0 ? (
-              <div className="divide-y divide-gray-200">
-                {filteredProducts.map((product) => (
-                  <div key={product._id} className="p-4 sm:p-6 hover:bg-gray-50 transition-colors">
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-[#2B3068] text-base sm:text-lg truncate">{product.name}</h3>
-                          <p className="text-sm text-gray-600 capitalize">{product.category} {product.category === "cylinder" ? `(${product.cylinderSize})` : ""}</p>
-                        </div>
+          {/* Mobile Rows (scrollable) */}
+          <div className="lg:hidden overflow-x-auto">
+            <div className="min-w-[720px]">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50 border-b border-gray-200">
+                    <TableHead className="p-3 text-xs font-semibold text-gray-700">Product</TableHead>
+                    <TableHead className="p-3 text-xs font-semibold text-gray-700">Category</TableHead>
+                    <TableHead className="p-3 text-xs font-semibold text-gray-700">Type</TableHead>
+                    <TableHead className="p-3 text-xs font-semibold text-gray-700">Cost</TableHead>
+                    <TableHead className="p-3 text-xs font-semibold text-gray-700">Least</TableHead>
+                    <TableHead className="p-3 text-xs font-semibold text-gray-700">Stock</TableHead>
+                    <TableHead className="p-3 text-xs font-semibold text-gray-700">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredProducts.map((product) => (
+                    <TableRow key={product._id} className="border-b border-gray-100">
+                      <TableCell className="p-3 font-medium text-[#2B3068] text-sm truncate max-w-[160px]">{product.name}</TableCell>
+                      <TableCell className="p-3 capitalize text-sm">{product.category}</TableCell>
+                      <TableCell className="p-3 text-sm">{product.category === "cylinder" ? product.cylinderSize : "-"}</TableCell>
+                      <TableCell className="p-3 text-sm">AED {product.costPrice.toFixed(2)}</TableCell>
+                      <TableCell className="p-3 text-sm">AED {product.leastPrice.toFixed(2)}</TableCell>
+                      <TableCell className="p-3 text-sm">
                         <span
-                          className={`px-2 py-1 rounded text-xs flex-shrink-0 ml-2 ${
+                          className={`px-2 py-1 rounded text-xs ${
                             product.currentStock > 10
                               ? "bg-green-100 text-green-800"
                               : product.currentStock > 0
@@ -387,52 +399,35 @@ export function ProductManagement() {
                                 : "bg-red-100 text-red-800"
                           }`}
                         >
-                          Stock: {product.currentStock}
+                          {product.currentStock}
                         </span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        <div>
-                          <span className="font-medium text-gray-700">Cost Price:</span>
-                          <span className="ml-2 text-gray-600">AED {product.costPrice.toFixed(2)}</span>
+                      </TableCell>
+                      <TableCell className="p-3">
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="sm" onClick={() => handleEdit(product)} className="min-h-[36px]">
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => openDeleteDialog(product)} className="text-red-600 hover:text-red-700 min-h-[36px]">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
                         </div>
-                        <div>
-                          <span className="font-medium text-gray-700">Least Price:</span>
-                          <span className="ml-2 text-gray-600">AED {product.leastPrice.toFixed(2)}</span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {filteredProducts.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center text-gray-500 py-8">
+                        <div className="text-gray-500">
+                          <Plus className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                          <p className="text-sm font-medium">No products found</p>
+                          <p className="text-xs">Add your first product to get started</p>
                         </div>
-                      </div>
-                      <div className="flex flex-col sm:flex-row gap-2 pt-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEdit(product)}
-                          className="w-full sm:w-auto border-[#2B3068] text-[#2B3068] hover:bg-[#2B3068] hover:text-white transition-colors min-h-[44px]"
-                        >
-                          <Edit className="w-4 h-4 mr-2" />
-                          Edit
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openDeleteDialog(product)}
-                          className="w-full sm:w-auto border-red-500 text-red-500 hover:bg-red-500 hover:text-white transition-colors min-h-[44px]"
-                        >
-                          <Trash2 className="w-4 h-4 mr-2" />
-                          Delete
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12 px-4">
-                <div className="text-gray-500">
-                  <Plus className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-4 opacity-50" />
-                  <p className="text-base sm:text-lg font-medium">No products found</p>
-                  <p className="text-sm">Add your first product to get started</p>
-                </div>
-              </div>
-            )}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </div>
         </CardContent>
       </Card>
