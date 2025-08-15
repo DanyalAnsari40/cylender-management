@@ -602,11 +602,11 @@ export function GasSales() {
               New Sale
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
             <DialogHeader>
               <DialogTitle>{editingSale ? "Edit Sale" : "Create New Sale"}</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-6 overflow-x-hidden">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2 relative">
                   <Label htmlFor="customer">Customer *</Label>
@@ -671,151 +671,167 @@ export function GasSales() {
                   </Button>
                 </div>
 
-                <div className="space-y-3">
-                  {formData.items.map((item, index) => (
-                    <div key={index} className="grid grid-cols-1 md:grid-cols-5 gap-3 p-4 border rounded-lg">
-                      <div className="space-y-2">
-                        <Label>Category</Label>
-                        <Select
-                          value={item.category || 'gas'}
-                          onValueChange={(value) => updateItem(index, 'category', value)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select category" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="gas">Gas</SelectItem>
-                            <SelectItem value="cylinder">Cylinder</SelectItem>
-                          </SelectContent>
-                        </Select>
+                {/* Scrollable container (horizontal + vertical) for items only */}
+                <div className="w-full overflow-x-auto">
+                  <div className="inline-block min-w-[900px] align-top">
+                    <div className="max-h-[55vh] overflow-y-auto pr-2">
+                      {/* Header row always visible to reinforce row layout */}
+                      <div className="grid grid-cols-[1fr_2fr_1fr_1.2fr_1.2fr] gap-3 px-2 py-2 text-xs font-medium text-gray-600 bg-gray-50 rounded-md mb-2 whitespace-nowrap">
+                        <div>Category</div>
+                        <div>Product</div>
+                        <div>Quantity</div>
+                        <div>Price (AED)</div>
+                        <div>Total</div>
                       </div>
 
                       <div className="space-y-2">
-                        <Label>Product</Label>
-                        <Select
-                          value={item.productId}
-                          onValueChange={(productId) => {
-                            console.log('Product selected:', productId)
-                            const itemCategory = item.category || 'gas'
-                            const categoryProducts = allProducts.filter((p: Product) => p.category === itemCategory)
-                            const product = categoryProducts.find((p: Product) => p._id === productId)
-                            console.log('Found product:', product)
-                            
-                            // Update both productId and price in a single atomic operation
-                            const updatedItems = [...formData.items]
-                            updatedItems[index] = {
-                              ...updatedItems[index],
-                              productId: productId,
-                              price: product ? product.leastPrice.toString() : updatedItems[index].price
-                            }
-                            
-                            console.log('Atomic update - item before:', formData.items[index])
-                            console.log('Atomic update - item after:', updatedItems[index])
-                            
-                            setFormData({ ...formData, items: updatedItems })
-                            
-                            if (product) {
-                              console.log('Auto-filled price:', product.leastPrice)
-                            }
-                          }}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder={`Select ${item.category || 'gas'} product`} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {allProducts
-                              .filter((p: Product) => p.category === (item.category || 'gas'))
-                              .map((product) => (
-                                <SelectItem key={product._id} value={product._id}>
-                                  {product.name}
-                                </SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Quantity</Label>
-                        <Input
-                          type="number"
-                          min="1"
-                          value={item.quantity}
-                          onChange={(e) => {
-                            const enteredQuantity = parseInt(e.target.value) || 0
-                            const product = products.find((p: Product) => p._id === item.productId)
-                            
-                            // Check stock availability in real-time
-                            if (product && enteredQuantity > product.currentStock) {
-                              setStockErrorMessage(`Insufficient stock for ${product.name}. Available: ${product.currentStock}, Required: ${enteredQuantity}`)
-                              setShowStockInsufficientPopup(true)
-                              
-                              // Auto-hide popup after 2 seconds
-                              setTimeout(() => {
-                                setShowStockInsufficientPopup(false)
-                              }, 2000)
-                              
-                              return // Don't update the quantity if stock is insufficient
-                            }
-                            
-                            updateItem(index, "quantity", e.target.value)
-                          }}
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Price (AED) - Editable</Label>
-                        <div className="relative">
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={item.price}
-                            onChange={(e) => {
-                              const product = allProducts.find((p: Product) => p._id === item.productId);
-                              const enteredPrice = parseFloat(e.target.value);
-                              if (product && enteredPrice < product.leastPrice) {
-                                setPriceAlert({ message: `Price must be at least ${product.leastPrice.toFixed(2)}`, index });
-                                setTimeout(() => setPriceAlert({ message: '', index: null }), 2000);
-                              }
-                              updateItem(index, 'price', e.target.value);
-                            }}
-                            placeholder={(() => {
-                              const product = allProducts.find((p: Product) => p._id === item.productId);
-                              return product?.leastPrice ? `Min: AED ${product.leastPrice.toFixed(2)}` : 'Select product first';
-                            })()}
-                            className="w-full h-10 sm:h-11 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 rounded-md shadow-sm"
-                          />
-                          {priceAlert.index === index && priceAlert.message && (
-                            <div className="absolute top-full mt-1 text-xs text-red-500 bg-white dark:bg-gray-800 p-1 rounded shadow-lg z-10">
-                              {priceAlert.message}
+                        {formData.items.map((item, index) => (
+                          <div key={index} className="grid grid-cols-[1fr_2fr_1fr_1.2fr_1.2fr] gap-3 px-2 py-3 border-b last:border-b-0">
+                            <div className="space-y-2">
+                              <Label className="md:hidden">Category</Label>
+                              <Select
+                                value={item.category || 'gas'}
+                                onValueChange={(value) => updateItem(index, 'category', value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select category" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="gas">Gas</SelectItem>
+                                  <SelectItem value="cylinder">Cylinder</SelectItem>
+                                </SelectContent>
+                              </Select>
                             </div>
-                          )}
-                        </div>
-                      </div>
 
-                      <div className="space-y-2">
-                        <Label>Total (AED)</Label>
-                        <div className="flex items-center gap-2">
-                          <Input value={(() => {
-                            const price = parseFloat(item.price) || 0
-                            const quantity = Number(item.quantity) || 0
-                            return `AED ${(price * quantity).toFixed(2)}`
-                          })()} disabled />
-                          {formData.items.length > 1 && (
-                            <Button
-                              type="button"
-                              onClick={() => removeItem(index)}
-                              variant="outline"
-                              size="sm"
-                              className="text-red-600 hover:text-red-700"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          )}
-                        </div>
+                            <div className="space-y-2">
+                              <Label className="md:hidden">Product</Label>
+                              <Select
+                                value={item.productId}
+                                onValueChange={(productId) => {
+                                  console.log('Product selected:', productId)
+                                  const itemCategory = item.category || 'gas'
+                                  const categoryProducts = allProducts.filter((p: Product) => p.category === itemCategory)
+                                  const product = categoryProducts.find((p: Product) => p._id === productId)
+                                  console.log('Found product:', product)
+                                  
+                                  // Update both productId and price in a single atomic operation
+                                  const updatedItems = [...formData.items]
+                                  updatedItems[index] = {
+                                    ...updatedItems[index],
+                                    productId: productId,
+                                    price: product ? product.leastPrice.toString() : updatedItems[index].price
+                                  }
+                                  
+                                  console.log('Atomic update - item before:', formData.items[index])
+                                  console.log('Atomic update - item after:', updatedItems[index])
+                                  
+                                  setFormData({ ...formData, items: updatedItems })
+                                  
+                                  if (product) {
+                                    console.log('Auto-filled price:', product.leastPrice)
+                                  }
+                                }}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder={`Select ${item.category || 'gas'} product`} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {allProducts
+                                    .filter((p: Product) => p.category === (item.category || 'gas'))
+                                    .map((product) => (
+                                      <SelectItem key={product._id} value={product._id}>
+                                        {product.name}
+                                      </SelectItem>
+                                    ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label className="md:hidden">Quantity</Label>
+                              <Input
+                                type="number"
+                                min="1"
+                                value={item.quantity}
+                                onChange={(e) => {
+                                  const enteredQuantity = parseInt(e.target.value) || 0
+                                  const product = products.find((p: Product) => p._id === item.productId)
+                                  
+                                  // Check stock availability in real-time
+                                  if (product && enteredQuantity > product.currentStock) {
+                                    setStockErrorMessage(`Insufficient stock for ${product.name}. Available: ${product.currentStock}, Required: ${enteredQuantity}`)
+                                    setShowStockInsufficientPopup(true)
+                                    
+                                    // Auto-hide popup after 2 seconds
+                                    setTimeout(() => {
+                                      setShowStockInsufficientPopup(false)
+                                    }, 2000)
+                                    
+                                    return // Don't update the quantity if stock is insufficient
+                                  }
+                                  
+                                  updateItem(index, "quantity", e.target.value)
+                                }}
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label className="md:hidden">Price (AED)</Label>
+                              <div className="relative">
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={item.price}
+                                  onChange={(e) => {
+                                    const product = allProducts.find((p: Product) => p._id === item.productId);
+                                    const enteredPrice = parseFloat(e.target.value);
+                                    if (product && enteredPrice < product.leastPrice) {
+                                      setPriceAlert({ message: `Price must be at least ${product.leastPrice.toFixed(2)}`, index });
+                                      setTimeout(() => setPriceAlert({ message: '', index: null }), 2000);
+                                    }
+                                    updateItem(index, 'price', e.target.value);
+                                  }}
+                                  placeholder={(() => {
+                                    const product = allProducts.find((p: Product) => p._id === item.productId);
+                                    return product?.leastPrice ? `Min: AED ${product.leastPrice.toFixed(2)}` : 'Select product first';
+                                  })()}
+                                  className="w-full h-10 sm:h-11 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 rounded-md shadow-sm"
+                                />
+                                {priceAlert.index === index && priceAlert.message && (
+                                  <div className="absolute top-full mt-1 text-xs text-red-500 bg-white dark:bg-gray-800 p-1 rounded shadow-lg z-10">
+                                    {priceAlert.message}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label className="md:hidden">Total (AED)</Label>
+                              <div className="flex items-center gap-2">
+                                <Input value={(() => {
+                                  const price = parseFloat(item.price) || 0
+                                  const quantity = Number(item.quantity) || 0
+                                  return `AED ${(price * quantity).toFixed(2)}`
+                                })()} disabled />
+                                {formData.items.length > 1 && (
+                                  <Button
+                                    type="button"
+                                    onClick={() => removeItem(index)}
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-red-600 hover:text-red-700"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  ))}
+                  </div>
                 </div>
 
                 <div className="text-right">

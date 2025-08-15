@@ -564,11 +564,12 @@ const [saleForSignature, setSaleForSignature] = useState<any | null>(null);
 
       {/* Create / Edit Sale Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
           <DialogHeader>
             <DialogTitle>{editingSale ? "Edit Sale" : "Create Sale"}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4 overflow-x-hidden">
+
             {/* Customer autocomplete */}
             <div className="space-y-2">
               <Label>Customer</Label>
@@ -608,131 +609,146 @@ const [saleForSignature, setSaleForSignature] = useState<any | null>(null);
                   Add Item
                 </Button>
               </div>
-              {(formData.items as any[]).map((item: any, index: number) => (
-                <div key={index} className="grid grid-cols-1 md:grid-cols-12 gap-3">
-                  {/* Category per item */}
-                  <div className="md:col-span-2">
-                    <Label>Category</Label>
-                    <Select
-                      value={item.category || formData.category || 'gas'}
-                      onValueChange={(value) => updateItem(index, 'category', value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="gas">Gas</SelectItem>
-                        <SelectItem value="cylinder">Cylinder</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
 
-                  {/* Product select filtered by category */}
-                  <div className="md:col-span-4">
-                    <Label>Product</Label>
-                    <Select
-                      value={item.productId}
-                      onValueChange={(productId) => {
-                        const itemCategory = (item.category || formData.category || 'gas') as any
-                        const categoryProducts = (allProducts || []).filter((p: Product) => p.category === itemCategory)
-                        const product = categoryProducts.find((p: Product) => p._id === productId)
-                        const updatedItems: any[] = [...(formData.items as any)]
-                        updatedItems[index] = {
-                          ...updatedItems[index],
-                          productId,
-                          price: product ? product.leastPrice.toString() : updatedItems[index].price,
-                        }
-                        setFormData({ ...formData, items: updatedItems as any })
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={`Select ${(item.category || formData.category || 'gas')}`} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(allProducts || [])
-                          .filter((p: Product) => p.category === (item.category || formData.category || 'gas'))
-                          .map((product) => (
-                            <SelectItem key={product._id} value={product._id}>
-                              {product.name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+              {/* Scrollable container (horizontal + vertical) for items only */}
+              <div className="w-full overflow-x-auto">
+                <div className="inline-block min-w-[900px] align-top">
+                  <div className="max-h-[55vh] overflow-y-auto pr-2">
+                    {/* Header row */}
+                    <div className="grid grid-cols-[1fr_2fr_1fr_1.2fr_1.2fr] gap-3 px-2 py-2 text-xs font-medium text-gray-600 bg-gray-50 rounded-md mb-2 whitespace-nowrap">
+                      <div>Category</div>
+                      <div>Product</div>
+                      <div>Quantity</div>
+                      <div>Price (AED)</div>
+                      <div>Total</div>
+                    </div>
 
-                  {/* Quantity with stock check */}
-                  <div className="md:col-span-2">
-                    <Label>Quantity</Label>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={item.quantity}
-                      onChange={(e) => {
-                        const enteredQuantity = parseInt(e.target.value) || 0
-                        const itemCategory = (item.category || formData.category || 'gas') as any
-                        const categoryProducts = (allProducts || []).filter((p: Product) => p.category === itemCategory)
-                        const product = categoryProducts.find((p: Product) => p._id === item.productId)
-                        if (product && enteredQuantity > product.currentStock) {
-                          setStockErrorMessage(`Insufficient stock for ${product.name}. Available: ${product.currentStock}, Required: ${enteredQuantity}`)
-                          setShowStockInsufficientPopup(true)
-                          setTimeout(() => setShowStockInsufficientPopup(false), 2000)
-                          return
-                        }
-                        updateItem(index, 'quantity', e.target.value)
-                      }}
-                    />
-                  </div>
+                    <div className="space-y-2">
+                      {(formData.items as any[]).map((item: any, index: number) => (
+                        <div key={index} className="grid grid-cols-[1fr_2fr_1fr_1.2fr_1.2fr] gap-3 px-2 py-3 border-b last:border-b-0">
+                          <div className="space-y-2">
+                            <Label className="md:hidden">Category</Label>
+                            <Select
+                              value={item.category || formData.category || 'gas'}
+                              onValueChange={(value) => updateItem(index, 'category', value)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="gas">Gas</SelectItem>
+                                <SelectItem value="cylinder">Cylinder</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
 
-                  {/* Price with min price alert */}
-                  <div className="md:col-span-3">
-                    <Label>Price (AED) - Editable</Label>
-                    <div className="relative">
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={item.price}
-                        onChange={(e) => {
-                          const productsByCat = (allProducts || []).filter((p: Product) => p.category === (item.category || formData.category || 'gas'))
-                          const product = productsByCat.find((p: Product) => p._id === item.productId)
-                          const enteredPrice = parseFloat(e.target.value)
-                          if (product && enteredPrice < product.leastPrice) {
-                            setPriceAlert({ message: `Price must be at least ${product.leastPrice.toFixed(2)}`, index })
-                            setTimeout(() => setPriceAlert({ message: '', index: null }), 2000)
-                          }
-                          updateItem(index, 'price', e.target.value)
-                        }}
-                        placeholder={(() => {
-                          const productsByCat = (allProducts || []).filter((p: Product) => p.category === (item.category || formData.category || 'gas'))
-                          const product = productsByCat.find((p: Product) => p._id === item.productId)
-                          return product?.leastPrice ? `Min: AED ${product.leastPrice.toFixed(2)}` : 'Select product first'
-                        })()}
-                        className="w-full h-10 sm:h-11"
-                      />
-                      {priceAlert.index === index && priceAlert.message && (
-                        <div className="absolute top-full mt-1 text-xs text-red-500 bg-white p-1 rounded shadow-lg z-10">
-                          {priceAlert.message}
+                          <div className="space-y-2">
+                            <Label className="md:hidden">Product</Label>
+                            <Select
+                              value={item.productId}
+                              onValueChange={(productId) => {
+                                const itemCategory = (item.category || formData.category || 'gas') as any
+                                const categoryProducts = (allProducts || []).filter((p: Product) => p.category === itemCategory)
+                                const product = categoryProducts.find((p: Product) => p._id === productId)
+                                const updatedItems: any[] = [...(formData.items as any)]
+                                updatedItems[index] = {
+                                  ...updatedItems[index],
+                                  productId,
+                                  price: product ? product.leastPrice.toString() : updatedItems[index].price,
+                                }
+                                setFormData({ ...formData, items: updatedItems as any })
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder={`Select ${(item.category || formData.category || 'gas')}`} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {(allProducts || [])
+                                  .filter((p: Product) => p.category === (item.category || formData.category || 'gas'))
+                                  .map((product) => (
+                                    <SelectItem key={product._id} value={product._id}>
+                                      {product.name}
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label className="md:hidden">Quantity</Label>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={item.quantity}
+                              onChange={(e) => {
+                                const enteredQuantity = parseInt(e.target.value) || 0
+                                const itemCategory = (item.category || formData.category || 'gas') as any
+                                const categoryProducts = (allProducts || []).filter((p: Product) => p.category === itemCategory)
+                                const product = categoryProducts.find((p: Product) => p._id === item.productId)
+                                if (product && enteredQuantity > product.currentStock) {
+                                  setStockErrorMessage(`Insufficient stock for ${product.name}. Available: ${product.currentStock}, Required: ${enteredQuantity}`)
+                                  setShowStockInsufficientPopup(true)
+                                  setTimeout(() => setShowStockInsufficientPopup(false), 2000)
+                                  return
+                                }
+                                updateItem(index, 'quantity', e.target.value)
+                              }}
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label className="md:hidden">Price (AED)</Label>
+                            <div className="relative">
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={item.price}
+                                onChange={(e) => {
+                                  const productsByCat = (allProducts || []).filter((p: Product) => p.category === (item.category || formData.category || 'gas'))
+                                  const product = productsByCat.find((p: Product) => p._id === item.productId)
+                                  const enteredPrice = parseFloat(e.target.value)
+                                  if (product && enteredPrice < product.leastPrice) {
+                                    setPriceAlert({ message: `Price must be at least ${product.leastPrice.toFixed(2)}`, index })
+                                    setTimeout(() => setPriceAlert({ message: '', index: null }), 2000)
+                                  }
+                                  updateItem(index, 'price', e.target.value)
+                                }}
+                                placeholder={(() => {
+                                  const productsByCat = (allProducts || []).filter((p: Product) => p.category === (item.category || formData.category || 'gas'))
+                                  const product = productsByCat.find((p: Product) => p._id === item.productId)
+                                  return product?.leastPrice ? `Min: AED ${product.leastPrice.toFixed(2)}` : 'Select product first'
+                                })()}
+                                className="w-full h-10 sm:h-11"
+                              />
+                              {priceAlert.index === index && priceAlert.message && (
+                                <div className="absolute top-full mt-1 text-xs text-red-500 bg-white p-1 rounded shadow-lg z-10">
+                                  {priceAlert.message}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label className="md:hidden">Total (AED)</Label>
+                            <div className="flex items-center gap-2">
+                              <div className="w-full text-right text-sm font-medium whitespace-nowrap">
+                                AED {(() => { const p = parseFloat(item.price)||0; const q = parseFloat(item.quantity)||0; return (p*q).toFixed(2) })()}
+                              </div>
+                              {formData.items.length > 1 && (
+                                <Button type="button" variant="outline" size="sm" onClick={() => removeItem(index)} className="text-red-600">
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      )}
+                      ))}
                     </div>
-                  </div>
-
-                  {/* Total and remove */}
-                  <div className="md:col-span-1 flex items-end">
-                    <div className="w-full text-right text-sm font-medium">
-                      AED {(() => { const p = parseFloat(item.price)||0; const q = parseFloat(item.quantity)||0; return (p*q).toFixed(2) })()}
-                    </div>
-                  </div>
-
-                  <div className="md:col-span-12 flex items-center justify-end">
-                    {formData.items.length > 1 && (
-                      <Button type="button" variant="outline" size="sm" onClick={() => removeItem(index)} className="text-red-600">
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    )}
                   </div>
                 </div>
-              ))}
+              </div>
+
             </div>
 
             {/* Payment Option / Received Amount Section */}
