@@ -10,7 +10,12 @@ const CylinderTransactionSchema = new mongoose.Schema(
     customer: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Customer",
-      required: true,
+      required: function () { return this.type !== "refill" },
+    },
+    supplier: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Supplier",
+      required: function () { return this.type === "refill" },
     },
     product: {
       type: mongoose.Schema.Types.ObjectId,
@@ -26,11 +31,6 @@ const CylinderTransactionSchema = new mongoose.Schema(
       type: Number,
       required: true,
       min: 1,
-    },
-    status: {
-      type: String,
-      enum: ["pending", "cleared", "overdue"],
-      default: "pending",
     },
     amount: {
       type: Number,

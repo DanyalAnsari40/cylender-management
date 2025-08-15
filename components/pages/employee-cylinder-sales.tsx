@@ -28,6 +28,14 @@ interface Customer {
   address?: string
 }
 
+interface Supplier {
+  _id: string
+  companyName: string
+  contactPerson?: string
+  phone?: string
+  email?: string
+}
+
 interface Product {
   _id: string
   name: string
@@ -42,6 +50,7 @@ interface CylinderTransaction {
   _id: string
   type: string
   customer: Customer
+  supplier?: Supplier
   product?: Product
   cylinderSize: string
   quantity: number
@@ -75,6 +84,7 @@ const CYLINDER_SIZE_DISPLAY = {
 export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
   const [transactions, setTransactions] = useState<CylinderTransaction[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [stockAssignments, setStockAssignments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -110,6 +120,7 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
   const [formData, setFormData] = useState({
     type: "deposit",
     customer: "",
+    supplier: "",
     product: "",
     cylinderSize: "small",
     quantity: 1,
@@ -142,11 +153,12 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
   const fetchData = async () => {
     try {
       setLoading(true)
-      const [transactionsResponse, customersResponse, productsResponse, stockAssignmentsResponse] = await Promise.all([
+      const [transactionsResponse, customersResponse, productsResponse, stockAssignmentsResponse, suppliersResponse] = await Promise.all([
         fetch(`/api/employee-cylinders?employeeId=${user.id}`),
         fetch("/api/customers"),
         fetch("/api/products"),
-        fetch(`/api/stock-assignments?employeeId=${user.id}&status=received`)
+        fetch(`/api/stock-assignments?employeeId=${user.id}&status=received`),
+        fetch("/api/suppliers")
       ])
 
       if (transactionsResponse.ok) {
@@ -165,6 +177,15 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
       } else {
         console.error("Failed to fetch customers:", customersResponse.status)
         setCustomers([])
+      }
+
+      if (suppliersResponse.ok) {
+        const suppliersData = await suppliersResponse.json()
+        const suppliers = suppliersData.data || suppliersData
+        setSuppliers(Array.isArray(suppliers) ? suppliers : [])
+      } else {
+        console.error("Failed to fetch suppliers:", suppliersResponse.status)
+        setSuppliers([])
       }
 
       // We'll prefer assigned products from stock assignments below. Still read products to enrich objects if needed.
@@ -215,6 +236,7 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
     setFormData({
       type: "deposit",
       customer: "",
+      supplier: "",
       product: "",
       cylinderSize: "small",
       quantity: 1,
@@ -283,6 +305,12 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
         newState.depositAmount = 0;
         newState.refillAmount = 0;
         newState.returnAmount = 0;
+        // Clear irrelevant party fields when switching types
+        if (value === 'refill') {
+          newState.customer = '';
+        } else {
+          newState.supplier = '';
+        }
       }
 
       // When product changes, auto-fill the amount with least price
@@ -357,7 +385,12 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
     e.preventDefault()
 
     // Enhanced validation
-    if (!formData.customer || !formData.product || !formData.cylinderSize || formData.quantity <= 0) {
+    if (formData.type === 'refill') {
+      if (!formData.supplier || !formData.product || !formData.cylinderSize || formData.quantity <= 0) {
+        toast.error("Please fill in all required fields")
+        return
+      }
+    } else if (!formData.customer || !formData.product || !formData.cylinderSize || formData.quantity <= 0) {
       toast.error("Please fill in all required fields")
       return
     }
@@ -391,7 +424,7 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
       const transactionData: any = {
         employeeId: user.id,
         type: formData.type,
-        customer: formData.customer,
+        // party is conditional below
         product: formData.product,
         cylinderSize: formData.cylinderSize,
         quantity: formData.quantity,
@@ -405,6 +438,12 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
         status: formData.paymentOption === 'delivery_note' ? 'pending' : formData.status,
         notes: formData.notes,
         paymentOption: formData.paymentOption,
+      }
+
+      if (formData.type === 'refill') {
+        transactionData.supplier = formData.supplier
+      } else {
+        transactionData.customer = formData.customer
       }
 
       if (formData.paymentOption === 'debit') {
@@ -453,7 +492,8 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
   const handleEdit = (transaction: CylinderTransaction) => {
     setFormData({
       type: transaction.type,
-      customer: transaction.customer?._id || '',
+      customer: (transaction as any).customer?._id || '',
+      supplier: (transaction as any).supplier?._id || '',
       product: transaction.product?._id || '',
       cylinderSize: transaction.cylinderSize,
       quantity: transaction.quantity,
@@ -500,6 +540,20 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
 
   // Handle view receipt - opens signature dialog first
   const handleViewReceipt = (transaction: CylinderTransaction) => {
+    // Build a safe party object for receipt/signature
+    const isRefill = transaction.type === 'refill'
+    const party = isRefill
+      ? {
+          name: (transaction.supplier as any)?.companyName || 'Supplier',
+          phone: (transaction.supplier as any)?.phone || 'N/A',
+          address: 'N/A',
+        }
+      : {
+          name: transaction.customer?.name || 'Customer',
+          phone: transaction.customer?.phone || 'N/A',
+          address: transaction.customer?.address || 'N/A',
+        }
+
     const transactionWithAddress = {
       ...transaction,
       invoiceNumber: `CYL-${transaction._id.slice(-6).toUpperCase()}`,
@@ -511,12 +565,8 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
       }] : [],
       totalAmount: transaction.amount,
       receivedAmount: transaction.amount,
-      customer: {
-        ...transaction.customer,
-        address: transaction.customer.address || "N/A",
-        phone: transaction.customer.phone || "N/A",
-      },
-    };
+      customer: party,
+    } as any;
     setTransactionForSignature(transactionWithAddress);
     setIsSignatureDialogOpen(true);
   };
@@ -604,7 +654,7 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
     const visibleColumns = getVisibleColumns()
     const columnHeaders: { [key: string]: string } = {
       type: 'Type',
-      customer: 'Customer',
+      customer: 'Customer / Supplier',
       product: 'Product',
       cylinderSize: 'Cylinder Size',
       quantity: 'Quantity',
@@ -651,10 +701,17 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
       ),
       customer: () => (
         <TableCell className="p-4">
-          <div>
-            <div className="font-medium">{transaction.customer.name}</div>
-            <div className="text-sm text-gray-500">{transaction.customer.phone}</div>
-          </div>
+          {transaction.type === 'refill' ? (
+            <div>
+              <div className="font-medium">{(transaction as any).supplier?.companyName || 'N/A'}</div>
+              <div className="text-sm text-gray-500">{(transaction as any).supplier?.phone || ''}</div>
+            </div>
+          ) : (
+            <div>
+              <div className="font-medium">{transaction.customer.name}</div>
+              <div className="text-sm text-gray-500">{transaction.customer.phone}</div>
+            </div>
+          )}
         </TableCell>
       ),
       product: () => (
@@ -875,33 +932,51 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
       </Select>
     </div>
 
-    {/* Customer */}
-    <div className="relative">
-      <Label htmlFor="customer">Customer</Label>
-      <Input
-        id="customer"
-        type="text"
-        value={customerSearch}
-        onChange={(e) => handleCustomerSearchChange(e.target.value)}
-        onFocus={handleCustomerInputFocus}
-        onBlur={handleCustomerInputBlur}
-        placeholder="Search for a customer..."
-        autoComplete="off"
-      />
-      {showCustomerSuggestions && filteredCustomers.length > 0 && (
-        <ul className="absolute z-50 w-full bg-white border border-gray-300 rounded-md mt-1 max-h-60 overflow-auto shadow-lg">
-          {filteredCustomers.map((customer) => (
-            <li
-              key={customer._id}
-              className="p-2 hover:bg-gray-100 cursor-pointer"
-              onMouseDown={() => handleCustomerSuggestionClick(customer)}
-            >
-              {customer.name} ({customer.phone})
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+    {/* Customer or Supplier (conditional) */}
+    {formData.type !== 'refill' ? (
+      <div className="relative">
+        <Label htmlFor="customer">Customer</Label>
+        <Input
+          id="customer"
+          type="text"
+          value={customerSearch}
+          onChange={(e) => handleCustomerSearchChange(e.target.value)}
+          onFocus={handleCustomerInputFocus}
+          onBlur={handleCustomerInputBlur}
+          placeholder="Search for a customer..."
+          autoComplete="off"
+        />
+        {showCustomerSuggestions && filteredCustomers.length > 0 && (
+          <ul className="absolute z-50 w-full bg-white border border-gray-300 rounded-md mt-1 max-h-60 overflow-auto shadow-lg">
+            {filteredCustomers.map((customer) => (
+              <li
+                key={customer._id}
+                className="p-2 hover:bg-gray-100 cursor-pointer"
+                onMouseDown={() => handleCustomerSuggestionClick(customer)}
+              >
+                {customer.name} ({customer.phone})
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    ) : (
+      <div>
+        <Label htmlFor="supplier">Supplier</Label>
+        <Select value={formData.supplier} onValueChange={(value) => handleSelectChange('supplier', value)}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select a supplier" />
+          </SelectTrigger>
+          <SelectContent>
+            {suppliers.map((s) => (
+              <SelectItem key={s._id} value={s._id}>
+                {s.companyName} {s.contactPerson ? `- ${s.contactPerson}` : ''}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    )}
 
     {/* Product */}
     <div>

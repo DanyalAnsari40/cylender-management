@@ -15,7 +15,12 @@ const EmployeeCylinderTransactionSchema = new mongoose.Schema(
     customer: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Customer",
-      required: true,
+      required: false,
+    },
+    supplier: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Supplier",
+      required: false,
     },
     product: {
       type: mongoose.Schema.Types.ObjectId,
@@ -85,6 +90,7 @@ const EmployeeCylinderTransactionSchema = new mongoose.Schema(
 // Index for faster queries
 EmployeeCylinderTransactionSchema.index({ employee: 1, createdAt: -1 })
 EmployeeCylinderTransactionSchema.index({ customer: 1, createdAt: -1 })
+EmployeeCylinderTransactionSchema.index({ supplier: 1, createdAt: -1 })
 EmployeeCylinderTransactionSchema.index({ type: 1 })
 EmployeeCylinderTransactionSchema.index({ status: 1 })
 

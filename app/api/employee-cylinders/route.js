@@ -27,6 +27,7 @@ export async function GET(request) {
 
     const transactions = await EmployeeCylinderTransaction.find(query)
       .populate('customer', 'name phone address')
+      .populate('supplier', 'companyName contactPerson phone email')
       .populate('employee', 'name')
       .populate('product')
       .sort({ createdAt: -1 })
@@ -52,6 +53,7 @@ export async function POST(request) {
       employeeId,
       type,
       customer,
+      supplier,
       product, // Added product
       cylinderSize,
       quantity,
@@ -68,8 +70,18 @@ export async function POST(request) {
     } = body
 
     // Validate required fields
-    if (!employeeId || !type || !customer || !product || !cylinderSize || !quantity) {
+    if (!employeeId || !type || !product || !cylinderSize || !quantity) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    }
+
+    if (type === 'refill') {
+      if (!supplier) {
+        return NextResponse.json({ error: "Supplier is required for refill" }, { status: 400 })
+      }
+    } else {
+      if (!customer) {
+        return NextResponse.json({ error: "Customer is required for this transaction" }, { status: 400 })
+      }
     }
 
     // Validate cylinder size
@@ -81,7 +93,6 @@ export async function POST(request) {
     const transactionData = {
       type,
       employee: employeeId,
-      customer,
       product, // Added product
       cylinderSize,
       quantity: parseInt(quantity),
@@ -97,6 +108,12 @@ export async function POST(request) {
       notes: notes || ""
     }
 
+    if (type === 'refill') {
+      transactionData.supplier = supplier
+    } else {
+      transactionData.customer = customer
+    }
+
     console.log("Creating employee cylinder transaction:", transactionData)
 
     const newTransaction = new EmployeeCylinderTransaction(transactionData)
@@ -105,6 +122,7 @@ export async function POST(request) {
     // Populate the response
     const populatedTransaction = await EmployeeCylinderTransaction.findById(savedTransaction._id)
       .populate("customer", "name email phone")
+      .populate("supplier", "companyName contactPerson phone email")
       .populate("employee", "name email")
 
     console.log("Employee cylinder transaction created successfully:", populatedTransaction._id)

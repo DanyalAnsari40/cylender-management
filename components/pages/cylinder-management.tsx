@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Plus, Edit, Trash2, Search, Filter, Cylinder, RotateCcw, ArrowDown, ArrowUp } from "lucide-react"
-import { cylindersAPI, customersAPI, productsAPI, employeeCylindersAPI } from "@/lib/api"
+import { cylindersAPI, customersAPI, productsAPI, employeeCylindersAPI, suppliersAPI } from "@/lib/api"
 import { CustomerDropdown } from "@/components/ui/customer-dropdown"
 import { ReceiptDialog } from "@/components/receipt-dialog"
 import { SignatureDialog } from "@/components/signature-dialog"
@@ -22,17 +22,24 @@ import { SignatureDialog } from "@/components/signature-dialog"
 interface CylinderTransaction {
   _id: string
   type: "deposit" | "refill" | "return"
-  customer: {
+  customer?: {
     _id: string
     name: string
     phone: string
     address: string
   }
+  supplier?: {
+    _id: string
+    companyName: string
+    contactPerson?: string
+    phone?: string
+    email?: string
+  }
   product?: {
     _id: string
     name: string
     category: string
-    cylinderType?: string
+    cylinderSize?: string
   }
   cylinderSize: string
   quantity: number
@@ -67,15 +74,24 @@ interface Product {
   _id: string
   name: string
   category: "gas" | "cylinder"
-  cylinderType?: "large" | "small"
+  cylinderSize?: "large" | "small"
   costPrice: number
   leastPrice: number
   currentStock: number
 }
 
+interface Supplier {
+  _id: string
+  companyName: string
+  contactPerson?: string
+  phone?: string
+  email?: string
+}
+
 export function CylinderManagement() {
   const [transactions, setTransactions] = useState<CylinderTransaction[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -168,7 +184,9 @@ export function CylinderManagement() {
         <TableCell className="p-4">
           <div>
             <div className="flex items-center gap-2">
-              <div className="font-medium">{transaction.customer?.name || "Unknown Customer"}</div>
+              <div className="font-medium">
+                {transaction.customer?.name || transaction.supplier?.companyName || "-"}
+              </div>
               {transaction.isEmployeeTransaction ? (
                 <div className="flex items-center gap-1">
                   <div className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-semibold" title={`Created by Employee: ${transaction.employee?.name || 'Unknown Employee'}`}>
@@ -183,7 +201,7 @@ export function CylinderManagement() {
                 </div>
               )}
             </div>
-            <div className="text-sm text-gray-500">{transaction.customer?.phone}</div>
+            <div className="text-sm text-gray-500">{transaction.customer?.phone || transaction.supplier?.phone || ''}</div>
             {transaction.isEmployeeTransaction && (
               <div className="text-xs text-blue-600 font-medium mt-1">
                 Employee: {transaction.employee?.name || "Unknown Employee"}
@@ -193,7 +211,7 @@ export function CylinderManagement() {
         </TableCell>
       ),
       product: () => {
-        const productName = transaction.product?.name || "Unknown Product"
+        const productName = transaction.product?.name || "-"
         
         return (
           <TableCell className="p-4">
@@ -314,6 +332,7 @@ export function CylinderManagement() {
   const [formData, setFormData] = useState({
     type: "deposit" as "deposit" | "refill" | "return",
     customerId: "",
+    supplierId: "",
     productId: "",
     productName: "",
     cylinderSize: "small" as string, // Default to small instead of empty string
@@ -355,6 +374,28 @@ export function CylinderManagement() {
     }
   }, [formData.paymentOption, formData.type])
 
+  // Clear irrelevant party based on type
+  useEffect(() => {
+    if (formData.type === 'refill') {
+      // clear customer selection when switching to refill
+      setCustomerSearchTerm("")
+      setFormData(prev => ({ ...prev, customerId: prev.customerId ? "" : prev.customerId }))
+    } else {
+      // clear supplier selection when not refill
+      setFormData(prev => ({ ...prev, supplierId: prev.supplierId ? "" : prev.supplierId }))
+    }
+  }, [formData.type])
+
+  // Ensure refill has an amount set from selected product price
+  useEffect(() => {
+    if (formData.type === 'refill' && formData.productId) {
+      const selectedProduct = products.find(p => p._id === formData.productId)
+      if (selectedProduct && (!formData.amount || formData.amount === 0)) {
+        setFormData(prev => ({ ...prev, amount: selectedProduct.leastPrice }))
+      }
+    }
+  }, [formData.type, formData.productId, products])
+
   const fetchData = async () => {
     try {
       setLoading(true)
@@ -363,6 +404,7 @@ export function CylinderManagement() {
       let transactionsData: CylinderTransaction[] = []
       let customersData: Customer[] = []
       let productsData: Product[] = []
+      let suppliersData: Supplier[] = []
       
       try {
         // Fetch both admin and employee cylinder transactions
@@ -401,6 +443,15 @@ export function CylinderManagement() {
         console.error("Failed to fetch customers:", error)
         customersData = []
       }
+      // Fetch suppliers
+      try {
+        const suppliersResponse = await suppliersAPI.getAll()
+        const sup = suppliersResponse.data?.data || suppliersResponse.data || suppliersResponse || []
+        suppliersData = Array.isArray(sup) ? sup : []
+      } catch (error) {
+        console.error("Failed to fetch suppliers:", error)
+        suppliersData = []
+      }
       
       try {
         const productsResponse = await productsAPI.getAll()
@@ -416,6 +467,7 @@ export function CylinderManagement() {
       
       setTransactions(transactionsData)
       setCustomers(customersData)
+      setSuppliers(suppliersData)
       setProducts(productsData)
     } catch (error) {
       console.error("Failed to fetch data:", error)
@@ -432,9 +484,16 @@ export function CylinderManagement() {
     try {
       
       // Validate required fields
-      if (!formData.customerId || formData.customerId === '') {
-        alert("Please select a customer")
-        return
+      if (formData.type === 'refill') {
+        if (!formData.supplierId || formData.supplierId === '') {
+          alert("Please select a supplier for refill")
+          return
+        }
+      } else {
+        if (!formData.customerId || formData.customerId === '') {
+          alert("Please select a customer")
+          return
+        }
       }
       
       if (!formData.productId || formData.productId === '') {
@@ -459,9 +518,8 @@ export function CylinderManagement() {
 
       console.log("Form validation passed, creating transaction data:", formData);
 
-      const transactionData = {
+      const baseData: any = {
         type: formData.type,
-        customer: formData.customerId, // This will be sent as 'customer' to match API expectation
         product: formData.productId,
         cylinderSize: formData.cylinderSize,
         quantity: Number(formData.quantity) || 0,
@@ -480,16 +538,26 @@ export function CylinderManagement() {
         notes: formData.notes,
       }
 
+      // Map party fields
+      if (formData.type === 'refill') {
+        baseData.supplier = formData.supplierId
+      } else {
+        baseData.customer = formData.customerId
+      }
+
+      const transactionData = baseData
+      console.log('[CylinderManagement] Submitting payload:', transactionData)
+
       if (editingTransaction) {
         await cylindersAPI.update(editingTransaction._id, transactionData)
       } else {
-        // Use specific API endpoints for different transaction types
+        // Use specific endpoints; for refill, use unified POST that supports supplier
         switch (formData.type) {
           case "deposit":
             await cylindersAPI.deposit(transactionData)
             break
           case "refill":
-            await cylindersAPI.refill(transactionData)
+            await cylindersAPI.create(transactionData)
             break
           case "return":
             await cylindersAPI.return(transactionData)
@@ -504,7 +572,13 @@ export function CylinderManagement() {
       setIsDialogOpen(false)
     } catch (error: any) {
       console.error("Failed to save transaction:", error)
-      alert(error.response?.data?.error || "Failed to save transaction")
+      console.error('Server response data:', error?.response?.data)
+      alert(
+        error?.response?.data?.details ||
+        error?.response?.data?.error ||
+        error?.message ||
+        "Failed to save transaction"
+      )
     }
   }
 
@@ -512,6 +586,7 @@ export function CylinderManagement() {
     setFormData({
       type: "" as any, // Clear to show placeholder
       customerId: "",
+      supplierId: "",
       productId: "",
       productName: "", // Added missing productName field
       cylinderSize: "",
@@ -538,9 +613,10 @@ export function CylinderManagement() {
     setEditingTransaction(transaction)
     setFormData({
       type: transaction.type,
-      customerId: transaction.customer._id,
-      productId: (transaction as any).productId || "",
-      productName: (transaction as any).productName || "",
+      customerId: transaction.customer?._id || "",
+      supplierId: transaction.supplier?._id || "",
+      productId: (transaction as any).productId || transaction.product?._id || "",
+      productName: (transaction as any).productName || transaction.product?.name || "",
       cylinderSize: transaction.cylinderSize,
       quantity: transaction.quantity,
       amount: transaction.amount,
@@ -555,7 +631,7 @@ export function CylinderManagement() {
       status: transaction.status,
       notes: transaction.notes || "",
     })
-    setCustomerSearchTerm(transaction.customer.name)
+    setCustomerSearchTerm(transaction.customer?.name || "")
     setShowCustomerSuggestions(false)
     setFilteredCustomerSuggestions([])
     setIsDialogOpen(true)
@@ -975,40 +1051,59 @@ export function CylinderManagement() {
                     </SelectContent>
                   </Select>
                 </div>
+                {formData.type !== 'refill' ? (
+                  <div className="space-y-2 relative">
+                    <Label htmlFor="customer">Customer *</Label>
+                    <Input
+                      id="customer"
+                      placeholder="Search by name, phone, or email..."
+                      value={customerSearchTerm}
+                      onChange={(e) => handleCustomerSearchChange(e.target.value)}
+                      onFocus={handleCustomerInputFocus}
+                      onBlur={handleCustomerInputBlur}
+                      className="pr-10"
+                    />
 
-                <div className="space-y-2 relative">
-                  <Label htmlFor="customer">Customer *</Label>
-                  <Input
-                    id="customer"
-                    placeholder="Search by name, phone, or email..."
-                    value={customerSearchTerm}
-                    onChange={(e) => handleCustomerSearchChange(e.target.value)}
-                    onFocus={handleCustomerInputFocus}
-                    onBlur={handleCustomerInputBlur}
-                    className="pr-10"
-                    required
-                  />
-
-                  {showCustomerSuggestions && filteredCustomerSuggestions.length > 0 && (
-                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                      {filteredCustomerSuggestions.map((customer) => (
-                        <div
-                          key={customer._id}
-                          className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-                          onClick={() => handleCustomerSuggestionClick(customer)}
-                        >
-                          <div className="flex flex-col">
-                            <span className="font-medium text-gray-900">{customer.name}</span>
-                            <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
-                              <span>Phone: {customer.phone}</span>
-                              {customer.email && <span>Email: {customer.email}</span>}
+                    {showCustomerSuggestions && filteredCustomerSuggestions.length > 0 && (
+                      <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                        {filteredCustomerSuggestions.map((customer) => (
+                          <div
+                            key={customer._id}
+                            className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                            onClick={() => handleCustomerSuggestionClick(customer)}
+                          >
+                            <div className="flex flex-col">
+                              <span className="font-medium text-gray-900">{customer.name}</span>
+                              <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
+                                <span>Phone: {customer.phone}</span>
+                                {customer.email && <span>Email: {customer.email}</span>}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label htmlFor="supplier">Supplier *</Label>
+                    <Select
+                      value={formData.supplierId}
+                      onValueChange={(value) => setFormData({ ...formData, supplierId: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select supplier" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {suppliers.map((s) => (
+                          <SelectItem key={s._id} value={s._id}>
+                            {s.companyName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -1020,7 +1115,9 @@ export function CylinderManagement() {
                     setFormData({ 
                       ...formData, 
                       productId: value,
-                      productName: selectedProduct ? selectedProduct.name : ""
+                      productName: selectedProduct ? selectedProduct.name : "",
+                      // Auto-fill amount from product price to avoid 0 for refills
+                      amount: selectedProduct ? selectedProduct.leastPrice : 0,
                     })
                   }}
                   required
@@ -1031,7 +1128,7 @@ export function CylinderManagement() {
                   <SelectContent>
                     {products.map((product) => (
                       <SelectItem key={product._id} value={product._id}>
-                        {product.name} ({product.cylinderType}) - AED {product.leastPrice.toFixed(2)}
+                        {product.name} ({product.cylinderSize}) - AED {product.leastPrice.toFixed(2)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1070,8 +1167,14 @@ export function CylinderManagement() {
                     value={formData.quantity}
                     onChange={(e) => {
                       const newQuantity = Number.parseInt(e.target.value) || 1
-                      
-                      // Validate stock if product is selected
+
+                      // For refill, skip stock validation
+                      if (formData.type === 'refill') {
+                        setFormData({ ...formData, quantity: newQuantity })
+                        return
+                      }
+
+                      // For deposit/return, validate stock if product is selected
                       if (formData.productId && newQuantity > 0) {
                         if (validateStock(formData.productId, newQuantity)) {
                           setFormData({ ...formData, quantity: newQuantity })
