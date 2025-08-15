@@ -1,0 +1,21 @@
+{
+  "name": "BARAKAH ALJAZEERA - Gas Management System",
+  "short_name": "BAJ Gas",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2B3068",
+  "description": "Professional gas and cylinder management system",
+  "icons": [
+    {
+      "src": "/placeholder-logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/placeholder-logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
