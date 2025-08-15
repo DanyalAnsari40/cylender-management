@@ -49,8 +49,7 @@ export function PurchaseManagement() {
   const [formData, setFormData] = useState(() => ({
     supplierId: "",
     purchaseDate: new Date().toISOString().split("T")[0],
-    purchaseType: "gas" as "gas" | "cylinder",
-    items: [{ productId: "", quantity: "", unitPrice: "" }],
+    items: [{ purchaseType: "gas" as "gas" | "cylinder", productId: "", quantity: "", unitPrice: "" }],
     notes: "",
   }))
 
@@ -162,7 +161,7 @@ export function PurchaseManagement() {
           supplier: formData.supplierId,
           product: item.productId,
           purchaseDate: formData.purchaseDate,
-          purchaseType: formData.purchaseType,
+          purchaseType: item.purchaseType,
           quantity: Number.parseInt(item.quantity),
           unitPrice: Number.parseFloat(item.unitPrice),
           totalAmount: Number.parseInt(item.quantity) * Number.parseFloat(item.unitPrice),
@@ -176,7 +175,7 @@ export function PurchaseManagement() {
             supplier: formData.supplierId,
             product: item.productId,
             purchaseDate: formData.purchaseDate,
-            purchaseType: formData.purchaseType,
+            purchaseType: item.purchaseType,
             quantity: Number.parseInt(item.quantity),
             unitPrice: Number.parseFloat(item.unitPrice),
             totalAmount: Number.parseInt(item.quantity) * Number.parseFloat(item.unitPrice),
@@ -201,8 +200,7 @@ export function PurchaseManagement() {
     setFormData({
       supplierId: "",
       purchaseDate: new Date().toISOString().split("T")[0],
-      purchaseType: "gas" as "gas" | "cylinder",
-      items: [{ productId: "", quantity: "", unitPrice: "" }],
+      items: [{ purchaseType: "gas" as "gas" | "cylinder", productId: "", quantity: "", unitPrice: "" }],
       notes: "",
     })
     setEditingOrder(null)
@@ -214,8 +212,8 @@ export function PurchaseManagement() {
     setFormData({
       supplierId: order.supplier._id,
       purchaseDate: order.purchaseDate.split("T")[0],
-      purchaseType: order.purchaseType,
       items: [{
+        purchaseType: order.purchaseType,
         productId: order.product._id,
         quantity: order.quantity.toString(),
         unitPrice: order.unitPrice.toString()
@@ -240,7 +238,10 @@ export function PurchaseManagement() {
   const addItem = () => {
     setFormData({
       ...formData,
-      items: [...formData.items, { productId: "", quantity: "", unitPrice: "" }],
+      items: [
+        ...formData.items,
+        { purchaseType: (formData.items[formData.items.length - 1]?.purchaseType || "gas") as "gas" | "cylinder", productId: "", quantity: "", unitPrice: "" }
+      ],
     })
   }
 
@@ -252,16 +253,30 @@ export function PurchaseManagement() {
   }
 
   const updateItem = (index: number, field: string, value: any) => {
-    const newItems = [...formData.items]
-    newItems[index] = {
-      ...newItems[index],
-      [field]: value,
-    }
-    setFormData({ ...formData, items: newItems })
+    setFormData((prev) => {
+      const newItems = [...prev.items]
+      newItems[index] = {
+        ...newItems[index],
+        [field]: value,
+      }
+      return { ...prev, items: newItems }
+    })
   }
 
-  const filteredProducts = products.filter((p: Product) => p.category === formData.purchaseType)
-  
+  const updateItemMulti = (
+    index: number,
+    updates: Partial<(typeof formData.items)[number]>
+  ) => {
+    setFormData((prev) => {
+      const newItems = [...prev.items]
+      newItems[index] = {
+        ...newItems[index],
+        ...updates,
+      }
+      return { ...prev, items: newItems }
+    })
+  }
+
   // Calculate total amount for all items
   const totalAmount = formData.items.reduce((sum, item) => {
     const quantity = Number(item.quantity) || 0
@@ -355,7 +370,7 @@ export function PurchaseManagement() {
                 </div>
               )}
 
-              <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+              <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6 overflow-x-hidden">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   <div className="space-y-2 sm:space-y-3">
                     <Label htmlFor="supplier" className="text-sm font-semibold text-gray-700">
@@ -393,30 +408,6 @@ export function PurchaseManagement() {
                   </div>
                 </div>
 
-                <div className="space-y-2 sm:space-y-3">
-                  <Label htmlFor="purchaseType" className="text-sm font-semibold text-gray-700">
-                    Purchase Type *
-                  </Label>
-                  <Select
-                    value={formData.purchaseType}
-                    onValueChange={(value: "gas" | "cylinder") => {
-                      setFormData({ 
-                        ...formData, 
-                        purchaseType: value,
-                        items: [{ productId: "", quantity: "", unitPrice: "" }] // Reset items when type changes
-                      })
-                    }}
-                  >
-                    <SelectTrigger className="h-10 sm:h-12 border-2 border-gray-200 rounded-lg sm:rounded-xl focus:border-[#2B3068] transition-colors">
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="gas">Gas</SelectItem>
-                      <SelectItem value="cylinder">Cylinder</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
                 {/* Items Section */}
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
@@ -433,81 +424,107 @@ export function PurchaseManagement() {
                     </Button>
                   </div>
 
-                  {formData.items.map((item, index) => (
-                    <div key={index} className="border border-gray-200 rounded-lg p-4 space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <div className="space-y-2">
-                          <Label>Product *</Label>
-                          <Select
-                            value={item.productId}
-                            onValueChange={(value) => updateItem(index, "productId", value)}
-                          >
-                            <SelectTrigger className="h-10">
-                              <SelectValue placeholder="Select product" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {filteredProducts.map((product) => (
-                                <SelectItem key={product._id} value={product._id}>
-                                  {product.name} - AED {product.costPrice}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label>Quantity *</Label>
-                          <Input
-                            type="number"
-                            min="1"
-                            value={item.quantity}
-                            onChange={(e) => updateItem(index, "quantity", e.target.value)}
-                            placeholder="Enter quantity"
-                            className="h-10"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label>Unit Price (AED) *</Label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0.01"
-                            value={item.unitPrice}
-                            onChange={(e) => updateItem(index, "unitPrice", e.target.value)}
-                            placeholder="Enter unit price"
-                            className="h-10"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label>Total (AED)</Label>
-                          <div className="flex items-center gap-2">
-                            <Input 
-                              value={(() => {
-                                const quantity = Number(item.quantity) || 0
-                                const unitPrice = Number(item.unitPrice) || 0
-                                return `AED ${(quantity * unitPrice).toFixed(2)}`
-                              })()} 
-                              disabled 
-                              className="h-10"
-                            />
-                            {formData.items.length > 1 && (
-                              <Button
-                                type="button"
-                                onClick={() => removeItem(index)}
-                                variant="outline"
-                                size="sm"
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  <div className="overflow-x-auto">
+                    <div className="max-h-[55vh] overflow-y-auto pr-2 sm:max-h-none">
+                      <div className="min-w-[760px] space-y-3">
+                      {formData.items.map((item, index) => (
+                        <div key={index} className="border-b md:border md:rounded-lg p-3 md:p-4">
+                          <div className="grid grid-cols-5 gap-4 items-end">
+                            <div className="space-y-2">
+                              <Label>Purchase Type *</Label>
+                              <Select
+                                value={item.purchaseType}
+                                onValueChange={(value: "gas" | "cylinder") => {
+                                  updateItemMulti(index, { purchaseType: value, productId: "" })
+                                }}
                               >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            )}
+                                <SelectTrigger className="h-10">
+                                  <SelectValue placeholder="Select type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="gas">Gas</SelectItem>
+                                  <SelectItem value="cylinder">Cylinder</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label>Product *</Label>
+                              <Select
+                                value={item.productId}
+                                onValueChange={(value) => updateItem(index, "productId", value)}
+                              >
+                                <SelectTrigger className="h-10">
+                                  <SelectValue placeholder="Select product" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {products
+                                    .filter((product) => product.category === item.purchaseType)
+                                    .map((product) => (
+                                    <SelectItem key={product._id} value={product._id}>
+                                      {product.name} - AED {product.costPrice}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label>Quantity *</Label>
+                              <Input
+                                type="number"
+                                min="1"
+                                value={item.quantity}
+                                onChange={(e) => updateItem(index, "quantity", e.target.value)}
+                                placeholder="Enter quantity"
+                                className="h-10"
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label>Unit Price (AED) *</Label>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0.01"
+                                value={item.unitPrice}
+                                onChange={(e) => updateItem(index, "unitPrice", e.target.value)}
+                                placeholder="Enter unit price"
+                                className="h-10"
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label>Total (AED)</Label>
+                              <div className="flex items-center gap-2">
+                                <Input 
+                                  value={(() => {
+                                    const quantity = Number(item.quantity) || 0
+                                    const unitPrice = Number(item.unitPrice) || 0
+                                    return `AED ${(quantity * unitPrice).toFixed(2)}`
+                                  })()} 
+                                  disabled 
+                                  className="h-10"
+                                />
+                                {formData.items.length > 1 && (
+                                  <Button
+                                    type="button"
+                                    onClick={() => removeItem(index)}
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         </div>
+                      ))}
                       </div>
                     </div>
-                  ))}
+                  </div>
                 </div>
 
                 {/* Total Amount Display */}
@@ -515,9 +532,7 @@ export function PurchaseManagement() {
                   <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 sm:p-4 rounded-lg sm:rounded-xl border border-blue-200">
                     <div className="flex justify-between items-center">
                       <span className="text-sm sm:text-lg font-semibold text-gray-700">Total Amount:</span>
-                      <span className="text-lg sm:text-2xl font-bold text-[#2B3068]">
-                        AED {totalAmount.toFixed(2)}
-                      </span>
+                      <span className="text-lg sm:text-2xl font-bold text-[#2B3068]">AED {totalAmount.toFixed(2)}</span>
                     </div>
                   </div>
                 )}
