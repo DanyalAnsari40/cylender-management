@@ -53,6 +53,8 @@ export function Reports() {
     clearedCustomers: 0
   })
 
+  
+
   const [filters, setFilters] = useState({
     customerName: "",
     status: "all",
@@ -77,6 +79,83 @@ export function Reports() {
     closingFull?: number
     closingEmpty?: number
     createdAt: string
+  }
+  // Download the grid view for a specific date as PDF
+  const downloadDsrGridPdf = (date: string) => {
+    try {
+      const byKey = new Map<string, DailyStockEntry>()
+      dsrEntries.filter(e => e.date === date).forEach(e => byKey.set(e.itemName.toLowerCase(), e))
+      const rowsSource = (dsrProducts.length > 0 ? dsrProducts : Array.from(new Set(dsrEntries.map(e => e.itemName))).map((n, i) => ({ _id: String(i), name: n } as any)))
+      const rows = rowsSource.map(p => {
+        const e = byKey.get(String(p.name).toLowerCase())
+        return `
+          <tr>
+            <td>${p.name}</td>
+            <td>${e ? e.openingFull : 0}</td>
+            <td>${e ? e.openingEmpty : 0}</td>
+            <td>${e ? e.refilled : 0}</td>
+            <td>${e ? e.cylinderSales : 0}</td>
+            <td>${e ? e.gasSales : 0}</td>
+            <td>${typeof e?.closingFull === 'number' ? e!.closingFull : 0}</td>
+            <td>${typeof e?.closingEmpty === 'number' ? e!.closingEmpty : 0}</td>
+          </tr>
+        `
+      }).join('')
+
+      const html = `<!doctype html>
+      <html>
+        <head>
+          <meta charset=\"utf-8\" />
+          <title>Daily Stock Report – ${date}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 16px; }
+            h1 { font-size: 18px; margin: 0 0 12px; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #ddd; padding: 6px 8px; font-size: 12px; }
+            th { background: #f7f7f7; text-align: left; }
+          </style>
+        </head>
+        <body>
+          <h1>Daily Stock Report – ${date}</h1>
+          <table>
+            <thead>
+              <tr>
+                <th>Items</th>
+                <th colspan=2>Opening</th>
+                <th colspan=3>During the day</th>
+                <th colspan=2>Closing</th>
+              </tr>
+              <tr>
+                <th></th>
+                <th>Full</th>
+                <th>Empty</th>
+                <th>Refilled</th>
+                <th>Cylinder Sales</th>
+                <th>Gas Sales</th>
+                <th>Full</th>
+                <th>Empty</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
+        </body>
+      </html>`
+
+      const w = window.open('', '_blank')
+      if (!w) {
+        alert('Please allow popups to download the PDF.')
+        return
+      }
+      w.document.write(html)
+      w.document.close()
+      w.focus()
+      w.print()
+    } catch (err) {
+      console.error(err)
+      alert('Failed to prepare PDF')
+    }
   }
 
   // Open the closing stock dialog for a specific entry
@@ -138,7 +217,147 @@ export function Reports() {
 
   const [showDSRForm, setShowDSRForm] = useState(false)
   const [showDSRList, setShowDSRList] = useState(false)
+  const [showDSRView, setShowDSRView] = useState(false)
   const [dsrEntries, setDsrEntries] = useState<DailyStockEntry[]>([])
+  const [dsrViewDate, setDsrViewDate] = useState<string>(new Date().toISOString().slice(0, 10))
+  // Products for DSR grid
+  interface ProductLite { _id: string; name: string }
+  const [dsrProducts, setDsrProducts] = useState<ProductLite[]>([])
+  type DsrGridRow = {
+    itemId: string
+    itemName: string
+    openingFull: string
+    openingEmpty: string
+    closingFull: string
+    closingEmpty: string
+  }
+  const [dsrGrid, setDsrGrid] = useState<DsrGridRow[]>([])
+  
+  // Load products when DSR form opens and build empty grid
+  useEffect(() => {
+    if (!showDSRForm) return
+    ;(async () => {
+      try {
+        const res = await fetch('/api/products', { cache: 'no-store' })
+        const json = await res.json().catch(() => ({}))
+        const list: any[] = Array.isArray(json?.data?.data)
+          ? json.data.data
+          : Array.isArray(json?.data)
+            ? json.data
+            : Array.isArray(json)
+              ? (json as any[])
+              : []
+        const products: ProductLite[] = list
+          .filter((p: any) => p && (p.name || p.title))
+          .map((p: any) => ({ _id: String(p._id || p.id || p.name), name: String(p.name || p.title) }))
+        setDsrProducts(products)
+        // Initialize grid with empty values, items populated
+        const baseGrid = products.map(p => ({
+          itemId: p._id,
+          itemName: p.name,
+          openingFull: '',
+          openingEmpty: '',
+          closingFull: '',
+          closingEmpty: '',
+        }))
+        setDsrGrid(baseGrid)
+        // Prefill openings from previous day closings per item
+        await prefillDsrGridOpenings(dsrForm.date, baseGrid)
+      } catch (e) {
+        setDsrProducts([])
+        setDsrGrid([])
+      }
+    })()
+  }, [showDSRForm])
+
+  const updateDsrGridCell = (itemId: string, field: keyof Omit<DsrGridRow, 'itemId' | 'itemName'>, value: string) => {
+    setDsrGrid(prev => prev.map(r => r.itemId === itemId ? { ...r, [field]: value } as DsrGridRow : r))
+  }
+  // Prefill Opening columns from previous day's closing for each item in the grid
+  const prefillDsrGridOpenings = async (date: string, rows: DsrGridRow[]) => {
+    const updated = await Promise.all(rows.map(async (r) => {
+      try {
+        const url = `${API_BASE}/previous?itemName=${encodeURIComponent(r.itemName)}&date=${encodeURIComponent(date)}`
+        const res = await fetch(url, { cache: 'no-store' })
+        if (res.ok) {
+          const json = await res.json()
+          if (json?.data) {
+            return {
+              ...r,
+              openingFull: String(json.data.closingFull ?? ''),
+              openingEmpty: String(json.data.closingEmpty ?? ''),
+            }
+          }
+        }
+      } catch {}
+      return r
+    }))
+    setDsrGrid(updated)
+  }
+
+  // Save handler for grid: persists each row (skips completely empty rows)
+  const saveDsrGrid = async () => {
+    const date = dsrForm.date
+    const rowsToSave = dsrGrid.filter(r => r.openingFull !== '' || r.openingEmpty !== '' || r.closingFull !== '' || r.closingEmpty !== '')
+    if (rowsToSave.length === 0) {
+      setShowDSRForm(false)
+      return
+    }
+    const toNumber = (v: string) => {
+      const n = Number.parseFloat(v)
+      return Number.isFinite(n) ? n : 0
+    }
+    try {
+      const results = await Promise.all(rowsToSave.map(async (r) => {
+        const payload: any = {
+          date,
+          itemName: r.itemName,
+          openingFull: toNumber(r.openingFull),
+          openingEmpty: toNumber(r.openingEmpty),
+        }
+        if (r.closingFull !== '') payload.closingFull = toNumber(r.closingFull)
+        if (r.closingEmpty !== '') payload.closingEmpty = toNumber(r.closingEmpty)
+        try {
+          const res = await fetch(API_BASE, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+          if (!res.ok) throw new Error('post failed')
+          const json = await res.json()
+          return json?.data || payload
+        } catch {
+          // offline/local fallback
+          return payload
+        }
+      }))
+
+      // Merge into local state list
+      const merged = [...dsrEntries]
+      results.forEach((d: any) => {
+        const id = d._id || `${d.itemName}-${d.date}`
+        const idx = merged.findIndex(x => (x.itemName === d.itemName && x.date === d.date))
+        const entry = {
+          id,
+          date: d.date,
+          itemName: d.itemName,
+          openingFull: Number(d.openingFull || 0),
+          openingEmpty: Number(d.openingEmpty || 0),
+          refilled: Number(d.refilled || 0),
+          cylinderSales: Number(d.cylinderSales || 0),
+          gasSales: Number(d.gasSales || 0),
+          closingFull: typeof d.closingFull === 'number' ? d.closingFull : undefined,
+          closingEmpty: typeof d.closingEmpty === 'number' ? d.closingEmpty : undefined,
+          createdAt: d.createdAt || new Date().toISOString(),
+        } as DailyStockEntry
+        if (idx >= 0) merged[idx] = entry; else merged.unshift(entry)
+      })
+      setDsrEntries(merged)
+      saveDsrLocal(merged)
+    } finally {
+      setShowDSRForm(false)
+    }
+  }
   // Download the current DSR list as PDF via browser print dialog
   const downloadDsrPdf = () => {
     try {
@@ -944,6 +1163,165 @@ export function Reports() {
         </CardContent>
       </Card>
 
+      {/* Daily Stock Report - Excel-like Dialog */}
+      <Dialog open={showDSRForm} onOpenChange={setShowDSRForm}>
+        <DialogContent className="max-w-[900px] sm:max-w-[1000px]">
+          <DialogHeader>
+            <DialogTitle>Daily Stock Report</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Optional date selector aligned with report */}
+            <div className="flex items-center gap-3">
+              <Label className="w-24">Date</Label>
+              <Input
+                type="date"
+                value={dsrForm.date}
+                onChange={(e) => setDsrForm(prev => ({ ...prev, date: e.target.value }))}
+                className="w-48"
+              />
+            </div>
+
+            <div className="overflow-auto border rounded-md">
+              <table className="min-w-full border-collapse">
+                <thead>
+                  <tr>
+                    <th className="border px-3 py-2 text-left bg-gray-50">Items</th>
+                    <th className="border px-3 py-2 text-center bg-gray-50" colSpan={2}>Opening</th>
+                    <th className="border px-3 py-2 text-center bg-gray-50" colSpan={2}>Closing</th>
+                  </tr>
+                  <tr>
+                    <th className="border px-3 py-2 text-left bg-white"></th>
+                    <th className="border px-3 py-2 text-center bg-white">Full</th>
+                    <th className="border px-3 py-2 text-center bg-white">Empty</th>
+                    <th className="border px-3 py-2 text-center bg-white">Full</th>
+                    <th className="border px-3 py-2 text-center bg-white">Empty</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dsrGrid.length === 0 ? (
+                    <tr>
+                      <td className="border px-3 py-3 text-center text-gray-500" colSpan={5}>No products found</td>
+                    </tr>
+                  ) : (
+                    dsrGrid.map(row => (
+                      <tr key={row.itemId}>
+                        <td className="border px-3 py-2 whitespace-nowrap">{row.itemName}</td>
+                        <td className="border px-2 py-1 w-28">
+                          <Input
+                            type="number"
+                            min={0}
+                            value={row.openingFull}
+                            onChange={(e) => updateDsrGridCell(row.itemId, 'openingFull', e.target.value)}
+                          />
+                        </td>
+                        <td className="border px-2 py-1 w-28">
+                          <Input
+                            type="number"
+                            min={0}
+                            value={row.openingEmpty}
+                            onChange={(e) => updateDsrGridCell(row.itemId, 'openingEmpty', e.target.value)}
+                          />
+                        </td>
+                        <td className="border px-2 py-1 w-28">
+                          <Input
+                            type="number"
+                            min={0}
+                            value={row.closingFull}
+                            onChange={(e) => updateDsrGridCell(row.itemId, 'closingFull', e.target.value)}
+                          />
+                        </td>
+                        <td className="border px-2 py-1 w-28">
+                          <Input
+                            type="number"
+                            min={0}
+                            value={row.closingEmpty}
+                            onChange={(e) => updateDsrGridCell(row.itemId, 'closingEmpty', e.target.value)}
+                          />
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowDSRForm(false)}>Cancel</Button>
+              <Button style={{ backgroundColor: '#2B3068' }} onClick={saveDsrGrid}>Save</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* DSR Grid View Dialog (read-only) */}
+      <Dialog open={showDSRView} onOpenChange={setShowDSRView}>
+        <DialogContent className="w-[95vw] max-w-[900px] p-3 sm:p-6 rounded-lg">
+          <DialogHeader>
+            <DialogTitle>Daily Stock Report – {dsrViewDate}</DialogTitle>
+          </DialogHeader>
+          <div className="mb-3 flex items-center gap-2">
+            <Label className="whitespace-nowrap">Date</Label>
+            <Input type="date" value={dsrViewDate} onChange={(e) => setDsrViewDate(e.target.value)} className="h-9 w-[10.5rem]" />
+          </div>
+          <div className="border rounded-lg overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Items</TableHead>
+                  <TableHead colSpan={2}>Opening</TableHead>
+                  <TableHead colSpan={3}>During the day</TableHead>
+                  <TableHead colSpan={2}>Closing</TableHead>
+                </TableRow>
+                <TableRow>
+                  <TableHead></TableHead>
+                  <TableHead>Full</TableHead>
+                  <TableHead>Empty</TableHead>
+                  <TableHead>Refilled</TableHead>
+                  <TableHead>Cylinder Sales</TableHead>
+                  <TableHead>Gas Sales</TableHead>
+                  <TableHead>Full</TableHead>
+                  <TableHead>Empty</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(() => {
+                  // Build rows for all products; merge with entries for selected date
+                  const byKey = new Map<string, DailyStockEntry>()
+                  dsrEntries
+                    .filter(e => e.date === dsrViewDate)
+                    .forEach(e => byKey.set(e.itemName.toLowerCase(), e))
+                  const rows = (dsrProducts.length > 0 ? dsrProducts : Array.from(new Set(dsrEntries.map(e => e.itemName))).map((n, i) => ({ _id: String(i), name: n } as any)))
+                  return rows.length > 0 ? (
+                    rows.map(p => {
+                      const e = byKey.get(String(p.name).toLowerCase())
+                      return (
+                        <TableRow key={p._id || p.name}>
+                          <TableCell className="font-medium">{p.name}</TableCell>
+                          <TableCell>{e ? e.openingFull : 0}</TableCell>
+                          <TableCell>{e ? e.openingEmpty : 0}</TableCell>
+                          <TableCell>{e ? e.refilled : 0}</TableCell>
+                          <TableCell>{e ? e.cylinderSales : 0}</TableCell>
+                          <TableCell>{e ? e.gasSales : 0}</TableCell>
+                          <TableCell>{typeof e?.closingFull === 'number' ? e!.closingFull : 0}</TableCell>
+                          <TableCell>{typeof e?.closingEmpty === 'number' ? e!.closingEmpty : 0}</TableCell>
+                        </TableRow>
+                      )
+                    })
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-6 text-gray-500">No data for selected date</TableCell>
+                    </TableRow>
+                  )
+                })()}
+              </TableBody>
+            </Table>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDSRView(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         {reportCards.map((card, index) => (
@@ -1480,52 +1858,7 @@ export function Reports() {
         />
       )}
 
-      {/* DSR Form Dialog */}
-      <Dialog open={showDSRForm} onOpenChange={setShowDSRForm}>
-        <DialogContent className="w-[95vw] max-w-[600px] sm:max-w-[700px] max-h-[85vh] overflow-y-auto p-4 sm:p-6 rounded-lg">
-          <DialogHeader>
-            <DialogTitle>Daily Stock Report</DialogTitle>
-          </DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-            <div className="space-y-2">
-              <Label>Date</Label>
-              <Input className="w-full" type="date" value={dsrForm.date} onChange={e => handleDsrChange("date", e.target.value)} />
-            </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label>Item Name</Label>
-              <Input className="w-full" placeholder="e.g., 5kg Cylinder" value={dsrForm.itemName} onChange={e => handleDsrChange("itemName", e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Opening Full</Label>
-              <Input className="w-full" type="number" min={0} value={dsrForm.openingFull} onChange={e => handleDsrChange("openingFull", e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Opening Empty</Label>
-              <Input className="w-full" type="number" min={0} value={dsrForm.openingEmpty} onChange={e => handleDsrChange("openingEmpty", e.target.value)} />
-            </div>
-            <div className="sm:col-span-2 pt-1">
-              <Label className="text-xs uppercase text-gray-500">During the day</Label>
-            </div>
-            <div className="space-y-2">
-              <Label>Refilled</Label>
-              <Input className="w-full" type="number" min={0} value={dsrForm.refilled} onChange={e => handleDsrChange("refilled", e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Cylinder Sales</Label>
-              <Input className="w-full" type="number" min={0} value={dsrForm.cylinderSales} onChange={e => handleDsrChange("cylinderSales", e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Gas Sales</Label>
-              <Input className="w-full" type="number" min={0} value={dsrForm.gasSales} onChange={e => handleDsrChange("gasSales", e.target.value)} />
-            </div>
-            {/* Closing stock is now captured via table action, not here */}
-          </div>
-          <DialogFooter className="flex flex-col sm:flex-row gap-2">
-            <Button className="w-full sm:w-auto" variant="outline" onClick={() => setShowDSRForm(false)}>Cancel</Button>
-            <Button className="w-full sm:w-auto" style={{ backgroundColor: "#2B3068" }} onClick={handleDsrSubmit}>Save</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Removed old DSR Form Dialog (replaced by Excel-like grid dialog) */}
 
       {/* DSR List Dialog */}
       <Dialog open={showDSRList} onOpenChange={setShowDSRList}>
@@ -1534,110 +1867,60 @@ export function Reports() {
             <DialogTitle>Daily Stock Reports</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-2">
-            <div className="text-sm text-gray-600">Total entries: {dsrEntries.length}</div>
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-              <Button className="w-full sm:w-auto" variant="outline" onClick={downloadDsrPdf}>Download PDF</Button>
-              <Button className="w-full sm:w-auto" variant="destructive" onClick={clearDsr}>Clear All</Button>
+            <div className="text-sm text-gray-600">Grid view · Select date to view</div>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Input type="date" value={dsrViewDate} onChange={(e) => setDsrViewDate(e.target.value)} className="h-9 w-[9.5rem]" />
+              <Button className="w-full bg-yellow-500 sm:w-auto" variant="outline" onClick={() => downloadDsrGridPdf(dsrViewDate)}>Download PDF</Button>
             </div>
           </div>
           <div className="border rounded-lg overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Item</TableHead>
-                  <TableHead>Opening Full</TableHead>
-                  <TableHead>Opening Empty</TableHead>
+                  <TableHead>Items</TableHead>
+                  <TableHead colSpan={2}>Opening</TableHead>
+                  <TableHead colSpan={3}>During the day</TableHead>
+                  <TableHead colSpan={2}>Closing</TableHead>
+                </TableRow>
+                <TableRow>
+                  <TableHead></TableHead>
+                  <TableHead>Full</TableHead>
+                  <TableHead>Empty</TableHead>
                   <TableHead>Refilled</TableHead>
                   <TableHead>Cylinder Sales</TableHead>
                   <TableHead>Gas Sales</TableHead>
-                  <TableHead>Closing Full</TableHead>
-                  <TableHead>Closing Empty</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead>Full</TableHead>
+                  <TableHead>Empty</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {dsrEntries.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={9} className="text-center py-6 text-gray-500">No entries yet</TableCell>
-                  </TableRow>
-                )}
-                {dsrEntries
-                  .slice()
-                  .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))
-                  .map(e => (
-                  <TableRow key={e.id}>
-                    {editingId === e.id ? (
-                      <>
-                        <TableCell>
-                          <Input type="date" value={editForm.date} onChange={ev => setEditForm(prev => ({ ...prev, date: ev.target.value }))} className="h-8" />
-                        </TableCell>
-                        <TableCell>
-                          <Input value={editForm.itemName} onChange={ev => setEditForm(prev => ({ ...prev, itemName: ev.target.value }))} className="h-8" />
-                        </TableCell>
-                        <TableCell>
-                          <Input type="number" min={0} value={editForm.openingFull} onChange={ev => setEditForm(prev => ({ ...prev, openingFull: ev.target.value }))} className="h-8 w-24" />
-                        </TableCell>
-                        <TableCell>
-                          <Input type="number" min={0} value={editForm.openingEmpty} onChange={ev => setEditForm(prev => ({ ...prev, openingEmpty: ev.target.value }))} className="h-8 w-24" />
-                        </TableCell>
-                        <TableCell>
-                          <Input type="number" min={0} value={editForm.refilled} onChange={ev => setEditForm(prev => ({ ...prev, refilled: ev.target.value }))} className="h-8 w-24" />
-                        </TableCell>
-                        <TableCell>
-                          <Input type="number" min={0} value={editForm.cylinderSales} onChange={ev => setEditForm(prev => ({ ...prev, cylinderSales: ev.target.value }))} className="h-8 w-24" />
-                        </TableCell>
-                        <TableCell>
-                          <Input type="number" min={0} value={editForm.gasSales} onChange={ev => setEditForm(prev => ({ ...prev, gasSales: ev.target.value }))} className="h-8 w-24" />
-                        </TableCell>
-                        <TableCell>
-                          <Input type="number" min={0} value={editForm.closingFull} onChange={ev => setEditForm(prev => ({ ...prev, closingFull: ev.target.value }))} className="h-8 w-24" />
-                        </TableCell>
-                        <TableCell>
-                          <Input type="number" min={0} value={editForm.closingEmpty} onChange={ev => setEditForm(prev => ({ ...prev, closingEmpty: ev.target.value }))} className="h-8 w-24" />
-                        </TableCell>
-                        <TableCell className="space-x-2">
-                          <Button size="sm" onClick={saveEdit}>Save</Button>
-                          <Button size="sm" variant="outline" onClick={cancelEdit}>Cancel</Button>
-                        </TableCell>
-                      </>
-                    ) : (
-                      <>
-                        <TableCell>{e.date}</TableCell>
-                        <TableCell className="font-medium">{e.itemName}</TableCell>
-                        <TableCell>{e.openingFull}</TableCell>
-                        <TableCell>{e.openingEmpty}</TableCell>
-                        <TableCell>{e.refilled}</TableCell>
-                        <TableCell>{e.cylinderSales}</TableCell>
-                        <TableCell>{e.gasSales}</TableCell>
-                        <TableCell className="font-semibold text-green-600">
-                          {(
-                            typeof e.closingFull === 'number' && typeof e.closingEmpty === 'number' &&
-                            !(e.closingFull === 0 && e.closingEmpty === 0)
-                          ) ? (
-                            e.closingFull
-                          ) : (
-                            <Button size="sm" onClick={() => openClosingDialog(e)}>Add Closing Stock</Button>
-                          )}
-                        </TableCell>
-                        <TableCell className="font-semibold text-blue-600">
-                          {(
-                            typeof e.closingFull === 'number' && typeof e.closingEmpty === 'number' &&
-                            !(e.closingFull === 0 && e.closingEmpty === 0)
-                          ) ? (
-                            e.closingEmpty
-                          ) : (
-                            <span className="text-gray-400">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="space-x-2">
-                          <Button size="sm" variant="outline" onClick={() => openEdit(e)}>Edit</Button>
-                          <Button size="sm" variant="destructive" onClick={() => deleteEntry(e)}>Delete</Button>
-                        </TableCell>
-                      </>
-                    )}
-                  </TableRow>
-                ))}
+                {(() => {
+                  const byKey = new Map<string, DailyStockEntry>()
+                  dsrEntries.filter(e => e.date === dsrViewDate).forEach(e => byKey.set(e.itemName.toLowerCase(), e))
+                  const rowsSource = (dsrProducts.length > 0 ? dsrProducts : Array.from(new Set(dsrEntries.map(e => e.itemName))).map((n, i) => ({ _id: String(i), name: n } as any)))
+                  if (rowsSource.length === 0) {
+                    return (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center py-6 text-gray-500">No data to show</TableCell>
+                      </TableRow>
+                    )
+                  }
+                  return rowsSource.map((p: any) => {
+                    const e = byKey.get(String(p.name).toLowerCase())
+                    return (
+                      <TableRow key={p._id || p.name}>
+                        <TableCell className="font-medium">{p.name}</TableCell>
+                        <TableCell>{e ? e.openingFull : 0}</TableCell>
+                        <TableCell>{e ? e.openingEmpty : 0}</TableCell>
+                        <TableCell>{e ? e.refilled : 0}</TableCell>
+                        <TableCell>{e ? e.cylinderSales : 0}</TableCell>
+                        <TableCell>{e ? e.gasSales : 0}</TableCell>
+                        <TableCell>{typeof e?.closingFull === 'number' ? e!.closingFull : 0}</TableCell>
+                        <TableCell>{typeof e?.closingEmpty === 'number' ? e!.closingEmpty : 0}</TableCell>
+                      </TableRow>
+                    )
+                  })
+                })()}
               </TableBody>
             </Table>
           </div>
