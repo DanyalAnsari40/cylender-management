@@ -393,9 +393,10 @@ export function CustomerManagement() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          {/* Desktop Table View */}
-          <div className="hidden lg:block overflow-x-auto">
-            <Table>
+          {/* Table View (all screens) with horizontal scroll on small viewports */}
+          <div className="w-full overflow-x-auto">
+            <div className="inline-block min-w-[900px] align-top">
+              <Table>
               <TableHeader>
                 <TableRow className="bg-gray-50 border-b-2 border-gray-200">
                   <TableHead className="font-bold text-gray-700 p-4">Name</TableHead>
@@ -453,70 +454,7 @@ export function CustomerManagement() {
                 )}
               </TableBody>
             </Table>
-          </div>
-
-          {/* Mobile Card View */}
-          <div className="lg:hidden">
-            {Array.isArray(filteredCustomers) && filteredCustomers.length > 0 ? (
-              <div className="divide-y divide-gray-200">
-                {filteredCustomers.map((customer) => (
-                  <div key={customer._id} className="p-4 sm:p-6 hover:bg-gray-50 transition-colors">
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="font-semibold text-[#2B3068] text-base sm:text-lg">{customer.name}</h3>
-                          <p className="text-sm text-gray-600">TR: {customer.trNumber}</p>
-                        </div>
-                        <div className="flex space-x-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEdit(customer)}
-                            className="border-[#2B3068] text-[#2B3068] hover:bg-[#2B3068] hover:text-white transition-colors min-h-[44px] min-w-[44px]"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDelete(customer._id)}
-                            className="border-red-500 text-red-500 hover:bg-red-500 hover:text-white transition-colors min-h-[44px] min-w-[44px]"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-                        <div>
-                          <span className="font-medium text-gray-700">Phone:</span>
-                          <span className="ml-2 text-gray-600">{customer.phone}</span>
-                        </div>
-                        <div>
-                          <span className="font-medium text-gray-700">Email:</span>
-                          <span className="ml-2 text-gray-600 break-all">{customer.email}</span>
-                        </div>
-                      </div>
-                      <div className="text-sm">
-                        <span className="font-medium text-gray-700">Address:</span>
-                        <span className="ml-2 text-gray-600">{customer.address}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12 px-4">
-                <div className="text-gray-500">
-                  <Users className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-4 opacity-50" />
-                  <p className="text-base sm:text-lg font-medium">
-                    {searchTerm ? "No customers match your search" : "No customers found"}
-                  </p>
-                  <p className="text-sm">
-                    {searchTerm ? "Try adjusting your search terms" : "Add your first customer to get started"}
-                  </p>
-                </div>
-              </div>
-            )}
+            </div>
           </div>
         </CardContent>
       </Card>
