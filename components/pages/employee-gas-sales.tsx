@@ -521,6 +521,9 @@ const [saleForSignature, setSaleForSignature] = useState<any | null>(null);
               <TableRow>
                 <TableHead>Invoice</TableHead>
                 <TableHead>Customer</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead>Product</TableHead>
+                <TableHead className="text-right">Quantity</TableHead>
                 <TableHead className="text-right">Total (AED)</TableHead>
                 <TableHead className="text-right">Received</TableHead>
                 <TableHead>Status</TableHead>
@@ -539,6 +542,33 @@ const [saleForSignature, setSaleForSignature] = useState<any | null>(null);
                   <TableRow key={sale._id}>
                     <TableCell className="font-medium">{sale.invoiceNumber}</TableCell>
                     <TableCell>{sale.customer?.name || "-"}</TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        {(Array.isArray(sale.items) ? sale.items : []).map((it: any, idx: number) => (
+                          <div key={idx} className="text-xs">
+                            {it?.product?.category || '-'}
+                          </div>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        {(Array.isArray(sale.items) ? sale.items : []).map((it: any, idx: number) => (
+                          <div key={idx} className="text-xs">
+                            {it?.product?.name || '-'}
+                          </div>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="space-y-1">
+                        {(Array.isArray(sale.items) ? sale.items : []).map((it: any, idx: number) => (
+                          <div key={idx} className="text-xs">
+                            {Number(it?.quantity || 0)}
+                          </div>
+                        ))}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-right">{(sale.totalAmount || 0).toFixed(2)}</TableCell>
                     <TableCell className="text-right">{(sale.receivedAmount || 0).toFixed(2)}</TableCell>
                     <TableCell>{getPaymentStatusBadge(sale.paymentStatus)}</TableCell>

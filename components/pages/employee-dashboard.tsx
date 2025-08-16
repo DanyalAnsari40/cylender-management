@@ -165,9 +165,12 @@ export function EmployeeDashboard({ user, setUnreadCount }: EmployeeDashboardPro
   const usageByProductFromGas = (productId: string) => {
     try {
       return salesData.reduce((sum: number, sale: any) => {
-        if (sale?.category !== 'gas') return sum
         const items = Array.isArray(sale.items) ? sale.items : []
-        const used = items.reduce((s: number, it: any) => s + (it.product?._id === productId ? (Number(it.quantity) || 0) : 0), 0)
+        const used = items.reduce((s: number, it: any) => {
+          const isGas = it?.product?.category === 'gas'
+          const matches = it?.product?._id === productId
+          return s + (isGas && matches ? (Number(it.quantity) || 0) : 0)
+        }, 0)
         return sum + used
       }, 0)
     } catch {
@@ -193,12 +196,12 @@ export function EmployeeDashboard({ user, setUnreadCount }: EmployeeDashboardPro
   const usageByProductFromCylinderSales = (productId: string, size?: string) => {
     try {
       return salesData.reduce((sum: number, sale: any) => {
-        if (sale?.category !== 'cylinder') return sum
         const items = Array.isArray(sale.items) ? sale.items : []
         const used = items.reduce((s: number, it: any) => {
-          const matchesProduct = it.product?._id === productId
-          const matchesSize = size ? (it.product?.cylinderType ? it.product.cylinderType === size : true) : true
-          return s + (matchesProduct && matchesSize ? (Number(it.quantity) || 0) : 0)
+          const isCylinder = it?.product?.category === 'cylinder'
+          const matchesProduct = it?.product?._id === productId
+          const matchesSize = size ? (it?.product?.cylinderType ? it.product.cylinderType === size : true) : true
+          return s + (isCylinder && matchesProduct && matchesSize ? (Number(it.quantity) || 0) : 0)
         }, 0)
         return sum + used
       }, 0)
