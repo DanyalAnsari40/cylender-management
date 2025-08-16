@@ -60,6 +60,14 @@ interface CylinderTransaction {
     _id: string
     name: string
   }
+  // New: optional items array for multi-item transactions
+  items?: Array<{
+    productId: string
+    productName: string
+    cylinderSize: string
+    quantity: number
+    amount: number
+  }>
 }
 
 interface Customer {
@@ -144,7 +152,7 @@ export function CylinderManagement() {
       type: 'Type',
       customer: 'Customer',
       product: 'Product',
-      cylinderSize: 'Cylinder Size',
+      cylinderSize: 'Items / Cylinder Size',
       quantity: 'Quantity',
       amount: 'Amount',
       depositAmount: 'Deposit Amount',
@@ -213,27 +221,55 @@ export function CylinderManagement() {
         </TableCell>
       ),
       product: () => {
+        const items = (transaction as any).items as any[] | undefined
         const productName = transaction.product?.name || "-"
-        
+        const content = items && items.length > 0
+          ? `${items.length} item${items.length > 1 ? 's' : ''}`
+          : productName
         return (
           <TableCell className="p-4">
-            <div className="font-medium">
-              {productName}
+            <div className="font-medium" title={items && items.length > 0 ? items.map((it: any) => `${it.productName} x${it.quantity} - AED ${Number(it.amount||0).toFixed(2)}`).join('\n') : productName}>
+              {content}
             </div>
           </TableCell>
         )
       },
-      cylinderSize: () => (
-        <TableCell className="p-4 font-medium">
-          {transaction.cylinderSize}
-        </TableCell>
-      ),
-      quantity: () => (
-        <TableCell className="p-4">{transaction.quantity}</TableCell>
-      ),
-      amount: () => (
-        <TableCell className="p-4 font-semibold">AED {transaction.amount.toFixed(2)}</TableCell>
-      ),
+      cylinderSize: () => {
+        const items = (transaction as any).items as any[] | undefined
+        const hasItems = items && items.length > 0
+        return (
+          <TableCell className="p-4">
+            {hasItems ? (
+              <div className="text-sm space-y-1">
+                {items!.map((it, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <span className="font-medium text-gray-800">{it.productName || products.find(p=>p._id===it.productId)?.name || 'Product'}</span>
+                    <span className="text-gray-500">({it.cylinderSize || products.find(p=>p._id===it.productId)?.cylinderSize || '-'})</span>
+                    <span className="text-gray-600">x {it.quantity}</span>
+                    <span className="text-gray-700">- AED {(Number(it.amount)||0).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <span className="font-medium capitalize">{transaction.cylinderSize || '-'}</span>
+            )}
+          </TableCell>
+        )
+      },
+      quantity: () => {
+        const items = (transaction as any).items as any[] | undefined
+        const totalQty = items && items.length > 0 ? items.reduce((s, it) => s + (Number(it.quantity)||0), 0) : transaction.quantity
+        return (
+          <TableCell className="p-4">{totalQty}</TableCell>
+        )
+      },
+      amount: () => {
+        const items = (transaction as any).items as any[] | undefined
+        const totalAmt = items && items.length > 0 ? items.reduce((s, it) => s + (Number(it.amount)||0), 0) : transaction.amount
+        return (
+          <TableCell className="p-4 font-semibold">AED {Number(totalAmt).toFixed(2)}</TableCell>
+        )
+      },
       depositAmount: () => (
         <TableCell className="p-4">
           {transaction.depositAmount ? `AED ${transaction.depositAmount.toFixed(2)}` : '-'}
@@ -351,20 +387,83 @@ export function CylinderManagement() {
     checkNumber: "",
     status: "pending" as "pending" | "cleared" | "overdue",
     notes: "",
+    // Items support: when items.length > 0, we submit an array of items in a single transaction
+    items: [] as Array<{
+      productId: string
+      productName: string
+      cylinderSize: string
+      quantity: number
+      amount: number // Row amount in AED
+    }>,
   })
 
   useEffect(() => {
     fetchData()
   }, [])
 
-  // Auto status for deposit based on Amount vs Deposit Amount
+  // Helpers for items
+  const getProductById = (id: string) => products.find(p => p._id === id)
+
+  const addItem = () => {
+    const firstProduct = products[0]
+    const defaultProductId = firstProduct?._id || ""
+    const defaultName = firstProduct?.name || ""
+    const defaultPrice = firstProduct?.leastPrice || 0
+    setFormData(prev => ({
+      ...prev,
+      items: [
+        ...prev.items,
+        {
+          productId: defaultProductId,
+          productName: defaultName,
+          cylinderSize: "small",
+          quantity: 1,
+          amount: Number(defaultPrice.toFixed(2))
+        }
+      ]
+    }))
+  }
+
+  const updateItem = (index: number, field: keyof (typeof formData.items)[number], value: any) => {
+    setFormData(prev => {
+      const items = [...prev.items]
+      const item = { ...items[index] }
+      ;(item as any)[field] = value
+      // If product changed, auto update name and default amount from leastPrice
+      if (field === 'productId') {
+        const p = getProductById(value)
+        item.productName = p?.name || ''
+        if (p) item.amount = Number((p.leastPrice).toFixed(2))
+      }
+      items[index] = item
+      return { ...prev, items }
+    })
+  }
+
+  const removeItem = (index: number) => {
+    setFormData(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== index) }))
+  }
+
+  const totalItemsAmount = () => formData.items.reduce((sum, it) => sum + (Number(it.amount) || 0), 0)
+
+  const validateItemStock = (productId: string, qty: number) => {
+    const p = getProductById(productId)
+    if (!p) return true
+    // Refill skips stock validation
+    if (formData.type === 'refill') return true
+    if (qty <= p.currentStock) return true
+    alert(`Insufficient stock! Available: ${p.currentStock}, Requested: ${qty}`)
+    return false
+  }
+
+  // Auto status for deposit based on total Amount (items or single) vs Deposit Amount
   useEffect(() => {
     if (formData.type === 'deposit') {
-      const amount = Number(formData.amount) || 0
+      const baseAmount = formData.items.length > 0 ? totalItemsAmount() : (Number(formData.amount) || 0)
       const depositAmount = Number(formData.depositAmount) || 0
-      setFormData(prev => ({ ...prev, status: depositAmount < amount ? 'pending' : 'cleared' }))
+      setFormData(prev => ({ ...prev, status: depositAmount < baseAmount ? 'pending' : 'cleared' }))
     }
-  }, [formData.type, formData.amount, formData.depositAmount])
+  }, [formData.type, formData.amount, formData.depositAmount, formData.items])
 
   // Enforce delivery note behavior: no deposit and pending status when delivery_note (legacy safety)
   useEffect(() => {
@@ -502,39 +601,50 @@ export function CylinderManagement() {
         }
       }
       
-      if (!formData.productId || formData.productId === '') {
-        alert("Please select a product")
-        return
-      }
-      
-      if (!formData.cylinderSize || formData.cylinderSize === '') {
-        alert("Please select a cylinder size")
-        return
-      }
-      
-      if (!formData.quantity || formData.quantity <= 0) {
-        alert("Please enter a valid quantity")
-        return
-      }
-      
-      if (formData.type !== 'refill' && (!formData.amount || formData.amount <= 0)) {
-        alert("Please enter a valid amount")
-        return
+      if (formData.items.length === 0) {
+        if (!formData.productId || formData.productId === '') {
+          alert("Please select a product")
+          return
+        }
+        if (!formData.cylinderSize || formData.cylinderSize === '') {
+          alert("Please select a cylinder size")
+          return
+        }
+        if (!formData.quantity || formData.quantity <= 0) {
+          alert("Please enter a valid quantity")
+          return
+        }
+        if (formData.type !== 'refill' && (!formData.amount || formData.amount <= 0)) {
+          alert("Please enter a valid amount")
+          return
+        }
+      } else {
+        // Validate items rows
+        if (formData.items.some(it => !it.productId)) { alert('Please select product for all items'); return }
+        if (formData.items.some(it => !it.cylinderSize)) { alert('Please select size for all items'); return }
+        if (formData.items.some(it => !it.quantity || it.quantity <= 0)) { alert('Please enter valid quantity for all items'); return }
+        if (formData.type !== 'refill' && formData.items.some(it => !it.amount || it.amount <= 0)) { alert('Please enter amount for all items'); return }
       }
 
       console.log("Form validation passed, creating transaction data:", formData);
 
+      // Build payload: if items exist, aggregate totals and include items array
+      const itemsTotal = formData.items.length > 0 ? totalItemsAmount() : Number(formData.amount) || 0
+      const single = formData.items.length === 0
+      const firstItem = single ? null : formData.items[0]
+      const totalQuantity = single ? (Number(formData.quantity) || 0) : formData.items.reduce((s, it) => s + (Number(it.quantity) || 0), 0)
+
       const baseData: any = {
         type: formData.type,
-        product: formData.productId,
-        cylinderSize: formData.cylinderSize,
-        quantity: Number(formData.quantity) || 0,
-        amount: Number(formData.amount) || 0,
-        depositAmount: formData.type === 'deposit'
-          ? (formData.paymentOption === 'delivery_note' ? 0 : Number(formData.depositAmount) || 0)
-          : 0,
-        refillAmount: formData.type === 'refill' ? Number(formData.amount) : 0,
-        returnAmount: formData.type === 'return' ? Number(formData.amount) : 0,
+        // Backward-compatible primary fields required by API
+        product: single ? formData.productId : (firstItem?.productId || ''),
+        cylinderSize: single ? formData.cylinderSize : (firstItem?.cylinderSize || ''),
+        quantity: totalQuantity,
+        amount: itemsTotal,
+        // Transaction-type specific amounts
+        depositAmount: formData.type === 'deposit' ? (formData.paymentOption === 'delivery_note' ? 0 : Number(formData.depositAmount) || 0) : 0,
+        refillAmount: formData.type === 'refill' ? itemsTotal : 0,
+        returnAmount: formData.type === 'return' ? itemsTotal : 0,
         // Only include received via details when paymentOption is debit
         paymentMethod: formData.paymentOption === 'debit' ? formData.paymentMethod : undefined,
         cashAmount: formData.paymentOption === 'debit' && formData.paymentMethod === 'cash' ? Number(formData.cashAmount) : 0,
@@ -542,6 +652,16 @@ export function CylinderManagement() {
         checkNumber: formData.paymentOption === 'debit' && formData.paymentMethod === 'cheque' ? formData.checkNumber : undefined,
         status: formData.status,
         notes: formData.notes,
+      }
+
+      if (!single) {
+        baseData.items = formData.items.map(it => ({
+          productId: it.productId,
+          productName: it.productName,
+          cylinderSize: it.cylinderSize,
+          quantity: Number(it.quantity) || 0,
+          amount: Number(it.amount) || 0,
+        }))
       }
 
       // Map party fields
@@ -608,6 +728,7 @@ export function CylinderManagement() {
       checkNumber: "",
       status: "pending" as any, // Default to pending
       notes: "",
+      items: [],
     })
     setCustomerSearchTerm("")
     setShowCustomerSuggestions(false)
@@ -617,15 +738,17 @@ export function CylinderManagement() {
 
   const handleEdit = (transaction: CylinderTransaction) => {
     setEditingTransaction(transaction)
+    const items = (transaction as any).items as any[] | undefined
+    const first = items && items.length > 0 ? items[0] : null
     setFormData({
       type: transaction.type,
       customerId: transaction.customer?._id || "",
       supplierId: transaction.supplier?._id || "",
-      productId: (transaction as any).productId || transaction.product?._id || "",
-      productName: (transaction as any).productName || transaction.product?.name || "",
-      cylinderSize: transaction.cylinderSize,
-      quantity: transaction.quantity,
-      amount: transaction.amount,
+      productId: first ? (first.productId || "") : ((transaction as any).productId || transaction.product?._id || ""),
+      productName: first ? (first.productName || "") : ((transaction as any).productName || transaction.product?.name || ""),
+      cylinderSize: first ? (first.cylinderSize || "") : transaction.cylinderSize,
+      quantity: first ? (first.quantity || 0) : transaction.quantity,
+      amount: items && items.length > 0 ? items.reduce((s, it) => s + (Number(it.amount)||0), 0) : transaction.amount,
       depositAmount: transaction.depositAmount || 0,
       refillAmount: transaction.refillAmount || 0,
       returnAmount: transaction.returnAmount || 0,
@@ -636,6 +759,13 @@ export function CylinderManagement() {
       checkNumber: (transaction as any).checkNumber || "",
       status: transaction.status,
       notes: transaction.notes || "",
+      items: items && items.length > 0 ? items.map((it: any) => ({
+        productId: it.productId,
+        productName: it.productName,
+        cylinderSize: it.cylinderSize,
+        quantity: it.quantity,
+        amount: it.amount,
+      })) : [],
     })
     setCustomerSearchTerm(transaction.customer?.name || "")
     setShowCustomerSuggestions(false)
@@ -1112,116 +1242,218 @@ export function CylinderManagement() {
                 )}
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="product">Product *</Label>
-                <Select
-                  value={formData.productId}
-                  onValueChange={(value) => {
-                    const selectedProduct = products.find(p => p._id === value)
-                    setFormData({ 
-                      ...formData, 
-                      productId: value,
-                      productName: selectedProduct ? selectedProduct.name : "",
-                      // Auto-fill amount from product price to avoid 0 for refills
-                      amount: selectedProduct ? selectedProduct.leastPrice : 0,
-                    })
-                  }}
-                  required
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select cylinder product" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {products.map((product) => (
-                      <SelectItem key={product._id} value={product._id}>
-                        {product.name} ({product.cylinderSize}) - AED {product.leastPrice.toFixed(2)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {formData.productId && (
-                  <p className="text-sm text-gray-500 mt-1">
-                    Price: AED {products.find(p => p._id === formData.productId)?.leastPrice.toFixed(2)} per unit
-                  </p>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="cylinderSize">Cylinder Size *</Label>
-                  <Select
-                    value={formData.cylinderSize}
-                    onValueChange={(value) => setFormData({ ...formData, cylinderSize: value })}
-                    required
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select size" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="small">Small</SelectItem>
-                      <SelectItem value="large">Large</SelectItem>
-                    </SelectContent>
-                  </Select>
+              {/* Items section (after Customer/Supplier) */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-lg font-semibold">Items</Label>
+                  <Button type="button" variant="outline" size="sm" onClick={addItem}>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Item
+                  </Button>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="quantity">Quantity *</Label>
-                  <Input
-                    id="quantity"
-                    type="number"
-                    min="1"
-                    value={formData.quantity}
-                    onChange={(e) => {
-                      const newQuantity = Number.parseInt(e.target.value) || 1
+                {formData.items.length > 0 && (
+                  <div className="w-full">
+                    <div>
+                      <div className="grid grid-cols-[2fr_1fr_1fr_1fr_0.6fr] gap-3 px-2 py-2 text-xs font-medium text-gray-600 bg-gray-50 rounded-md mb-2">
+                        <div>Product *</div>
+                        <div>Cylinder Size *</div>
+                        <div>Quantity *</div>
+                        <div>Amount *</div>
+                        <div>Actions</div>
+                      </div>
 
-                      // For refill, skip stock validation
-                      if (formData.type === 'refill') {
-                        setFormData({ ...formData, quantity: newQuantity })
-                        return
-                      }
+                      <div className="space-y-2">
+                        {formData.items.map((item, index) => (
+                          <div key={index} className="grid grid-cols-[2fr_1fr_1fr_1fr_0.6fr] gap-3 px-2 py-3 border-b last:border-b-0">
+                            {/* Product */}
+                            <div className="space-y-2">
+                              <Label className="md:hidden">Product</Label>
+                              <Select
+                                value={item.productId}
+                                onValueChange={(productId) => {
+                                  updateItem(index, 'productId', productId)
+                                }}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select product" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {products.map((p) => (
+                                    <SelectItem key={p._id} value={p._id}>
+                                      {p.name} ({p.cylinderSize}) - AED {p.leastPrice.toFixed(2)}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
 
-                      // For deposit/return, validate stock if product is selected
-                      if (formData.productId && newQuantity > 0) {
-                        if (validateStock(formData.productId, newQuantity)) {
-                          setFormData({ ...formData, quantity: newQuantity })
-                        }
-                      } else {
-                        setFormData({ ...formData, quantity: newQuantity })
-                      }
-                    }}
-                    required
-                  />
-                </div>
+                            {/* Size */}
+                            <div className="space-y-2">
+                              <Label className="md:hidden">Cylinder Size</Label>
+                              <Select
+                                value={item.cylinderSize}
+                                onValueChange={(value) => updateItem(index, 'cylinderSize', value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select size" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="small">Small</SelectItem>
+                                  <SelectItem value="large">Large</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
 
-                {formData.type === 'deposit' && (
-                  <div className="space-y-2">
-                    <Label htmlFor="amount">Amount *</Label>
-                    <Input
-                      id="amount"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formData.amount}
-                      onChange={(e) => {
-                        const newAmount = Number.parseFloat(e.target.value) || 0
-                        setFormData({ ...formData, amount: newAmount })
-                        
-                        // Auto-update status based on amount and deposit amount
-                        if (formData.depositAmount > 0) {
-                          updateStatusBasedOnAmounts(newAmount, formData.depositAmount)
-                        }
-                      }}
-                      required
-                    />
+                            {/* Quantity */}
+                            <div className="space-y-2">
+                              <Label className="md:hidden">Quantity</Label>
+                              <Input
+                                type="number"
+                                min={1}
+                                value={item.quantity}
+                                onChange={(e) => {
+                                  const q = Number.parseInt(e.target.value) || 1
+                                  if (validateItemStock(item.productId, q)) updateItem(index, 'quantity', q)
+                                }}
+                              />
+                            </div>
+
+                            {/* Amount */}
+                            <div className="space-y-2">
+                              <Label className="md:hidden">Amount</Label>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min={0}
+                                value={item.amount}
+                                onChange={(e) => updateItem(index, 'amount', Number.parseFloat(e.target.value) || 0)}
+                              />
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex items-center">
+                              <Button type="button" variant="ghost" className="text-red-600" onClick={() => removeItem(index)}>
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                        {/* Total items amount */}
+                        <div className="flex justify-end px-2 py-3">
+                          <div className="text-sm font-semibold text-gray-800">
+                            Total Items Amount: AED {formData.items.reduce((sum, it) => sum + (Number(it.amount) || 0), 0).toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
 
+              {/* Single-item fields (rendered only when no items) */}
+              {formData.items.length === 0 && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="product">Product *</Label>
+                    <Select
+                      value={formData.productId}
+                      onValueChange={(value) => {
+                        const selectedProduct = products.find(p => p._id === value)
+                        setFormData({
+                          ...formData,
+                          productId: value,
+                          productName: selectedProduct ? selectedProduct.name : "",
+                          amount: selectedProduct ? selectedProduct.leastPrice : 0,
+                        })
+                      }}
+                      required
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select cylinder product" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {products.map((product) => (
+                          <SelectItem key={product._id} value={product._id}>
+                            {product.name} ({product.cylinderSize}) - AED {product.leastPrice.toFixed(2)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {formData.productId && (
+                      <p className="text-sm text-gray-500 mt-1">
+                        Price: AED {products.find(p => p._id === formData.productId)?.leastPrice.toFixed(2)} per unit
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="cylinderSize">Cylinder Size *</Label>
+                      <Select
+                        value={formData.cylinderSize}
+                        onValueChange={(value) => setFormData({ ...formData, cylinderSize: value })}
+                        required
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select size" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="small">Small</SelectItem>
+                          <SelectItem value="large">Large</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="quantity">Quantity *</Label>
+                      <Input
+                        id="quantity"
+                        type="number"
+                        min="1"
+                        value={formData.quantity}
+                        onChange={(e) => {
+                          const newQuantity = Number.parseInt(e.target.value) || 1
+                          if (formData.type === 'refill') {
+                            setFormData({ ...formData, quantity: newQuantity })
+                            return
+                          }
+                          if (formData.productId && newQuantity > 0) {
+                            if (validateItemStock(formData.productId, newQuantity)) {
+                              setFormData({ ...formData, quantity: newQuantity })
+                            }
+                          } else {
+                            setFormData({ ...formData, quantity: newQuantity })
+                          }
+                        }}
+                        required
+                      />
+                    </div>
+
+                    {formData.type === 'deposit' && (
+                      <div className="space-y-2">
+                        <Label htmlFor="amount">Amount *</Label>
+                        <Input
+                          id="amount"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={formData.amount}
+                          onChange={(e) => {
+                            const newAmount = Number.parseFloat(e.target.value) || 0
+                            setFormData({ ...formData, amount: newAmount })
+                          }}
+                          required
+                        />
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+
               {/* Payment Option, Received Via, Deposit Amount, Status, and Notes Section */}
               {formData.type === 'deposit' && (
                 <div className="space-y-4">
-                  {/* Payment Option removed per requirements */}
-
                   {/* Received Via (deposit) */}
                   <div className="space-y-2">
                     <Label htmlFor="paymentMethod">Received Via</Label>
@@ -1283,7 +1515,7 @@ export function CylinderManagement() {
                     </div>
                   )}
 
-                  {/* Deposit Amount controlled by payment option (we are already inside non-refill block) */}
+                  {/* Deposit Amount */}
                   <div className="space-y-2">
                     <Label htmlFor="depositAmount">Deposit Amount</Label>
                     <Input
@@ -1302,6 +1534,7 @@ export function CylinderManagement() {
                     )}
                   </div>
 
+                  {/* Status */}
                   <div className="space-y-2">
                     <Label htmlFor="status">Status</Label>
                     <Select

@@ -37,6 +37,31 @@ const CylinderTransactionSchema = new mongoose.Schema(
       required: true,
       min: 0,
     },
+    // Optional: list of items for multi-item transactions
+    items: [
+      {
+        productId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Product",
+        },
+        productName: {
+          type: String,
+          default: "",
+        },
+        cylinderSize: {
+          type: String,
+          enum: ["small", "large"],
+        },
+        quantity: {
+          type: Number,
+          min: 1,
+        },
+        amount: {
+          type: Number,
+          min: 0,
+        },
+      },
+    ],
     depositAmount: {
       type: Number,
       default: 0,
