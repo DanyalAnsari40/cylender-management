@@ -1028,63 +1028,47 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
       />
     </div>
 
-    {/* Amount */}
-    <div>
-      <Label htmlFor="amount">Amount</Label>
-      <Input
-        id="amount"
-        name="amount"
-        type="number"
-        value={formData.amount}
-        onChange={handleChange}
-        className="w-full"
-      />
-    </div>
-
-    {/* Payment Option + Received Via (like admin) - Only show if not refill */}
-    {formData.type !== 'refill' && (
-      <>
-        <div>
-          <Label htmlFor="paymentOption">Payment Option</Label>
-          <Select value={formData.paymentOption} onValueChange={(value) => handleSelectChange("paymentOption", value)}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select payment option" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="debit">Debit</SelectItem>
-              <SelectItem value="credit">Credit</SelectItem>
-              <SelectItem value="delivery_note">Delivery Note</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {formData.paymentOption === 'debit' && (
-          <div>
-            <Label htmlFor="paymentMethod">Received Via</Label>
-            <Select value={formData.paymentMethod} onValueChange={(value) => handleSelectChange("paymentMethod", value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select received via" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="cash">Cash</SelectItem>
-                <SelectItem value="cheque">Cheque</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-      </>
+    {/* Amount - only for deposit */}
+    {formData.type === 'deposit' && (
+      <div>
+        <Label htmlFor="amount">Amount</Label>
+        <Input
+          id="amount"
+          name="amount"
+          type="number"
+          value={formData.amount}
+          onChange={handleChange}
+          className="w-full"
+        />
+      </div>
     )}
 
-    {/* Security Cash field (if cash) - Only when debit and not refill */}
-    {formData.type !== 'refill' && formData.paymentOption === 'debit' && formData.paymentMethod === 'cash' && (
+    {/* Received Via - for deposit and return (Payment Option hidden) */}
+    {(formData.type === 'deposit' || formData.type === 'return') && (
+      <div>
+        <Label htmlFor="paymentMethod">Received Via</Label>
+        <Select value={formData.paymentMethod} onValueChange={(value) => handleSelectChange("paymentMethod", value)}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select received via" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="cash">Cash</SelectItem>
+            <SelectItem value="cheque">Cheque</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    )}
+
+    {/* Security Cash field (if cash) - deposit and return */}
+    {(formData.type === 'deposit' || formData.type === 'return') && formData.paymentMethod === 'cash' && (
       <div>
         <Label htmlFor="cashAmount">Security Cash</Label>
         <Input id="cashAmount" name="cashAmount" type="number" value={formData.cashAmount} onChange={handleChange} />
       </div>
     )}
 
-    {/* Cheque fields (if cheque) - Only when debit and not refill */}
-    {formData.type !== 'refill' && formData.paymentOption === 'debit' && formData.paymentMethod === 'cheque' && (
+    {/* Cheque fields (if cheque) - deposit and return */}
+    {(formData.type === 'deposit' || formData.type === 'return') && formData.paymentMethod === 'cheque' && (
       <>
         <div>
           <Label htmlFor="bankName">Bank Name</Label>
@@ -1097,26 +1081,22 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
       </>
     )}
 
-    {/* Deposit Amount - Only show if not refill. Disabled and 0 for delivery note */}
-    {formData.type !== 'refill' && (
+    {/* Deposit Amount - deposit only */}
+    {formData.type === 'deposit' && (
       <div>
         <Label htmlFor="depositAmount">Deposit Amount</Label>
         <Input
           id="depositAmount"
           name="depositAmount"
           type="number"
-          value={formData.paymentOption === 'delivery_note' ? 0 : formData.depositAmount}
+          value={formData.depositAmount}
           onChange={handleChange}
-          disabled={formData.paymentOption === 'delivery_note'}
         />
-        {formData.paymentOption === 'delivery_note' && (
-          <p className="text-sm text-gray-500">Deposit amount is 0 for Delivery Note. Status will be set to Pending.</p>
-        )}
       </div>
     )}
 
-    {/* Status - Only show if not refill */}
-    {formData.type !== 'refill' && (
+    {/* Status - deposit only */}
+    {formData.type === 'deposit' && (
       <div>
         <Label htmlFor="status">Status</Label>
         <Select value={formData.status} onValueChange={(value) => handleSelectChange("status", value)}>

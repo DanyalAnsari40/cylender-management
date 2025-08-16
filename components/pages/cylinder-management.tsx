@@ -200,6 +200,8 @@ export function CylinderManagement() {
                   </div>
                 </div>
               )}
+
+              
             </div>
             <div className="text-sm text-gray-500">{transaction.customer?.phone || transaction.supplier?.phone || ''}</div>
             {transaction.isEmployeeTransaction && (
@@ -355,22 +357,19 @@ export function CylinderManagement() {
     fetchData()
   }, [])
 
+  // Auto status for deposit based on Amount vs Deposit Amount
   useEffect(() => {
     if (formData.type === 'deposit') {
-      const amount = Number(formData.amount) || 0;
-      const depositAmount = Number(formData.depositAmount) || 0;
-      if (depositAmount < amount) {
-        setFormData(prev => ({ ...prev, status: 'pending' }));
-      } else {
-        setFormData(prev => ({ ...prev, status: 'cleared' }));
-      }
+      const amount = Number(formData.amount) || 0
+      const depositAmount = Number(formData.depositAmount) || 0
+      setFormData(prev => ({ ...prev, status: depositAmount < amount ? 'pending' : 'cleared' }))
     }
-  }, [formData.amount, formData.depositAmount, formData.type]);
+  }, [formData.type, formData.amount, formData.depositAmount])
 
-  // Enforce delivery note behavior: no deposit and pending status
+  // Enforce delivery note behavior: no deposit and pending status when delivery_note (legacy safety)
   useEffect(() => {
     if (formData.paymentOption === 'delivery_note' && formData.type !== 'refill') {
-      setFormData(prev => ({ ...prev, depositAmount: 0, status: 'pending' }));
+      setFormData(prev => ({ ...prev, depositAmount: 0, status: 'pending' }))
     }
   }, [formData.paymentOption, formData.type])
 
@@ -385,6 +384,13 @@ export function CylinderManagement() {
       setFormData(prev => ({ ...prev, supplierId: prev.supplierId ? "" : prev.supplierId }))
     }
   }, [formData.type])
+
+  // Since Payment Option is hidden for deposit, force it to 'debit'
+  useEffect(() => {
+    if (formData.type === 'deposit' && formData.paymentOption !== 'debit') {
+      setFormData(prev => ({ ...prev, paymentOption: 'debit' }))
+    }
+  }, [formData.type, formData.paymentOption])
 
   // Ensure refill has an amount set from selected product price
   useEffect(() => {
@@ -1080,7 +1086,7 @@ export function CylinderManagement() {
                               </div>
                             </div>
                           </div>
-                        ))}
+                         ))}
                       </div>
                     )}
                   </div>
@@ -1187,7 +1193,7 @@ export function CylinderManagement() {
                   />
                 </div>
 
-                {formData.type !== 'refill' && (
+                {formData.type === 'deposit' && (
                   <div className="space-y-2">
                     <Label htmlFor="amount">Amount *</Label>
                     <Input
@@ -1201,7 +1207,7 @@ export function CylinderManagement() {
                         setFormData({ ...formData, amount: newAmount })
                         
                         // Auto-update status based on amount and deposit amount
-                        if (formData.type === "deposit" && formData.depositAmount > 0) {
+                        if (formData.depositAmount > 0) {
                           updateStatusBasedOnAmounts(newAmount, formData.depositAmount)
                         }
                       }}
@@ -1212,50 +1218,30 @@ export function CylinderManagement() {
               </div>
 
               {/* Payment Option, Received Via, Deposit Amount, Status, and Notes Section */}
-              {formData.type !== 'refill' && (
+              {formData.type === 'deposit' && (
                 <div className="space-y-4">
-                  {/* Payment Option */}
+                  {/* Payment Option removed per requirements */}
+
+                  {/* Received Via (deposit) */}
                   <div className="space-y-2">
-                    <Label htmlFor="paymentOption">Payment Option</Label>
+                    <Label htmlFor="paymentMethod">Received Via</Label>
                     <Select
-                      value={formData.paymentOption}
-                      onValueChange={(value: 'debit' | 'credit' | 'delivery_note') =>
-                        setFormData({ ...formData, paymentOption: value })
+                      value={formData.paymentMethod}
+                      onValueChange={(value: 'cash' | 'cheque') =>
+                        setFormData({ ...formData, paymentMethod: value })
                       }
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select payment option" />
+                        <SelectValue placeholder="Select received via" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="debit">Debit</SelectItem>
-                        <SelectItem value="credit">Credit</SelectItem>
-                        <SelectItem value="delivery_note">Delivery Note</SelectItem>
+                        <SelectItem value="cash">Cash</SelectItem>
+                        <SelectItem value="cheque">Cheque</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
-                  {/* Received Via (only for debit) */}
-                  {formData.paymentOption === 'debit' && (
-                    <div className="space-y-2">
-                      <Label htmlFor="paymentMethod">Received Via</Label>
-                      <Select
-                        value={formData.paymentMethod}
-                        onValueChange={(value: 'cash' | 'cheque') =>
-                          setFormData({ ...formData, paymentMethod: value })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select received via" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="cash">Cash</SelectItem>
-                          <SelectItem value="cheque">Cheque</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-
-                  {formData.paymentOption === 'debit' && formData.paymentMethod === 'cash' && (
+                  {formData.paymentMethod === 'cash' && (
                     <div className="space-y-2">
                       <Label htmlFor="cashAmount">Security Cash</Label>
                       <Input
@@ -1272,7 +1258,7 @@ export function CylinderManagement() {
                     </div>
                   )}
 
-                  {formData.paymentOption === 'debit' && formData.paymentMethod === 'cheque' && (
+                  {formData.paymentMethod === 'cheque' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="bankName">Bank Name</Label>
@@ -1334,6 +1320,71 @@ export function CylinderManagement() {
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
+              )}
+
+              {/* Return: Received Via and Security fields */}
+              {formData.type === 'return' && (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="paymentMethod">Received Via</Label>
+                    <Select
+                      value={formData.paymentMethod}
+                      onValueChange={(value: 'cash' | 'cheque') =>
+                        setFormData({ ...formData, paymentMethod: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select received via" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="cash">Cash</SelectItem>
+                        <SelectItem value="cheque">Cheque</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {formData.paymentMethod === 'cash' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="cashAmount">Security Cash</Label>
+                      <Input
+                        id="cashAmount"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={formData.cashAmount}
+                        onChange={(e) =>
+                          setFormData({ ...formData, cashAmount: Number.parseFloat(e.target.value) || 0 })
+                        }
+                        placeholder="Enter cash amount"
+                      />
+                    </div>
+                  )}
+
+                  {formData.paymentMethod === 'cheque' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="bankName">Bank Name</Label>
+                        <Input
+                          id="bankName"
+                          type="text"
+                          value={formData.bankName}
+                          onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
+                          placeholder="Enter bank name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="checkNumber">Check Number</Label>
+                        <Input
+                          id="checkNumber"
+                          type="text"
+                          value={formData.checkNumber}
+                          onChange={(e) => setFormData({ ...formData, checkNumber: e.target.value })}
+                          placeholder="Enter check number"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
