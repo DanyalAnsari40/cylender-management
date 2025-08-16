@@ -353,7 +353,10 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
         derivedPaymentStatus = 'pending'
       } else if (formData.paymentOption === 'debit') {
         derivedPaymentMethod = 'debit'
-        // status already managed by amount comparison
+        // Use entered received amount for debit
+        derivedReceivedAmount = parseFloat(formData.receivedAmount || '0') || 0
+        // Force status to cleared for debit, per requirement
+        derivedPaymentStatus = 'cleared'
       }
 
       const saleData = {

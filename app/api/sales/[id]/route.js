@@ -1,49 +1,62 @@
 import { NextResponse } from "next/server"
 import dbConnect from "@/lib/mongodb"
 import Sale from "@/models/Sale"
-import Customer from "@/models/Customer"
 
+// Align PUT with POST schema: items[], totalAmount, paymentMethod, paymentStatus, receivedAmount, notes, customer, invoiceNumber
 export async function PUT(request, { params }) {
   try {
     await dbConnect()
 
     const { id } = params
-    const data = await request.json()
+    const body = await request.json()
 
-    // Get the existing sale to calculate balance changes
+    // Basic validation to avoid NaN casts
+    const {
+      invoiceNumber,
+      customer,
+      items,
+      totalAmount,
+      paymentMethod,
+      paymentStatus,
+      receivedAmount,
+      notes,
+    } = body
+
+    // Ensure sale exists
     const existingSale = await Sale.findById(id)
     if (!existingSale) {
       return NextResponse.json({ error: "Sale not found" }, { status: 404 })
     }
 
-    // Calculate new amounts
-    const totalAmount = data.quantity * data.unitPrice
-    const amountDue = totalAmount - (data.amountPaid || 0)
+    // Optional: allow partial updates; but make sure numbers are valid when provided
+    const updateData = {}
 
-    const updateData = {
-      customer: data.customer,
-      product: data.product,
-      date: data.date,
-      category: data.category,
-      quantity: data.quantity,
-      unitPrice: data.unitPrice,
-      totalAmount,
-      amountPaid: data.amountPaid || 0,
-      amountDue,
-      notes: data.notes || "",
+    if (invoiceNumber !== undefined) updateData.invoiceNumber = invoiceNumber
+    if (customer !== undefined) updateData.customer = customer
+    if (items !== undefined) updateData.items = items
+    if (totalAmount !== undefined) {
+      const ta = Number(totalAmount)
+      if (Number.isNaN(ta)) {
+        return NextResponse.json({ error: "totalAmount must be a number" }, { status: 400 })
+      }
+      updateData.totalAmount = ta
     }
+    if (paymentMethod !== undefined) updateData.paymentMethod = paymentMethod
+    if (paymentStatus !== undefined) updateData.paymentStatus = paymentStatus
+    if (receivedAmount !== undefined) {
+      const ra = Number(receivedAmount)
+      if (Number.isNaN(ra) || ra < 0) {
+        return NextResponse.json({ error: "receivedAmount must be a non-negative number" }, { status: 400 })
+      }
+      updateData.receivedAmount = ra
+    }
+    if (notes !== undefined) updateData.notes = notes
 
     const sale = await Sale.findByIdAndUpdate(id, updateData, { new: true })
-      .populate("customer", "name email")
-      .populate("product", "name category")
+      .populate("customer", "name phone address email")
+      .populate("items.product", "name price category")
 
-    // Update customer balance (reverse old transaction and apply new one)
-    const balanceDifference = amountDue - existingSale.amountDue
-    await Customer.findByIdAndUpdate(data.customer, {
-      $inc: { balance: balanceDifference },
-    })
-
-    return NextResponse.json({ data: sale })
+    return NextResponse.json({ data: sale, message: "Sale updated successfully" })
   } catch (error) {
     console.error("Error updating sale:", error)
     return NextResponse.json({ error: "Failed to update sale" }, { status: 500 })
