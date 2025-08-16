@@ -234,7 +234,7 @@ export function GasSales() {
       if (formData.paymentOption === 'credit') {
         derivedPaymentMethod = 'credit'
         derivedPaymentStatus = 'pending'
-        // keep entered receivedAmount for partial credit payments
+        derivedReceivedAmount = 0
       } else if (formData.paymentOption === 'delivery_note') {
         derivedPaymentMethod = 'delivery_note'
         derivedPaymentStatus = 'pending'
@@ -260,7 +260,33 @@ export function GasSales() {
 
       if (editingSale) {
         console.log('GasSales - Updating existing sale:', editingSale._id)
-        await salesAPI.update(editingSale._id, saleData)
+        // Some backends treat PUT as full replace; include required fields like invoiceNumber
+        const updatePayload = {
+          ...saleData,
+          invoiceNumber: (editingSale as any).invoiceNumber,
+          customer: saleData.customer,
+        }
+        const fullUpdatePayload = {
+          ...updatePayload,
+          customerSignature: (editingSale as any).customerSignature || "",
+        }
+        try {
+          console.log('GasSales - PUT full payload:', fullUpdatePayload)
+          await salesAPI.update(editingSale._id, fullUpdatePayload)
+        } catch (err: any) {
+          console.error('GasSales - Full PUT failed, retrying minimal update. Error:', err?.response?.data || err?.message)
+          const minimalUpdatePayload = {
+            // Minimal fields commonly allowed in updates
+            customer: saleData.customer,
+            paymentMethod: derivedPaymentMethod,
+            paymentStatus: derivedPaymentStatus,
+            receivedAmount: derivedReceivedAmount,
+            totalAmount: totalAmount,
+            notes: formData.notes,
+          }
+          console.log('GasSales - PUT minimal payload:', minimalUpdatePayload)
+          await salesAPI.update(editingSale._id, minimalUpdatePayload)
+        }
       } else {
         console.log('GasSales - Creating new sale')
         await salesAPI.create(saleData)
@@ -270,7 +296,7 @@ export function GasSales() {
       resetForm()
       setIsDialogOpen(false)
     } catch (error: any) {
-      console.error("Failed to save sale:", error)
+      console.error("Failed to save sale:", error?.response?.data || error?.message, error)
       const errorMessage = error.response?.data?.error || "Failed to save sale"
       
       // Check if it's a stock insufficient error
@@ -602,10 +628,13 @@ export function GasSales() {
               New Sale
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto overflow-x-hidden" aria-describedby="sale-dialog-description">
             <DialogHeader>
               <DialogTitle>{editingSale ? "Edit Sale" : "Create New Sale"}</DialogTitle>
             </DialogHeader>
+            <p id="sale-dialog-description" className="sr-only">
+              {editingSale ? "Edit the selected gas sale details and save changes." : "Fill the form to create a new gas sale."}
+            </p>
             <form onSubmit={handleSubmit} className="space-y-6 overflow-x-hidden">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2 relative">
@@ -852,9 +881,10 @@ export function GasSales() {
                       next.paymentStatus = "pending"
                       next.paymentMethod = "delivery_note"
                     } else if (value === "credit") {
-                      // Keep received amount editable for partial credit payments
+                      // For credit, fix receivedAmount to 0 and status pending
                       next.paymentMethod = "credit"
                       next.paymentStatus = "pending"
+                      next.receivedAmount = "0"
                     }
                     if (value === "debit") {
                       // Default to 0 and let user type amount
@@ -924,58 +954,11 @@ export function GasSales() {
                   </div>
                 )}
 
-                {formData.paymentOption === "credit" && (
-                  <div className="space-y-2">
-                    <Label htmlFor="creditReceived">Credit Received (AED)</Label>
-                    <Input
-                      id="creditReceived"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formData.receivedAmount}
-                      onChange={(e) => {
-                        const receivedAmount = e.target.value
-                        const receivedValue = parseFloat(receivedAmount) || 0
-                        // Auto-select status based on received amount vs total amount
-                        let newPaymentStatus = formData.paymentStatus
-                        if (receivedValue === totalAmount && totalAmount > 0) {
-                          newPaymentStatus = "cleared"
-                        } else if (receivedValue > 0 && receivedValue < totalAmount) {
-                          newPaymentStatus = "pending"
-                        } else if (receivedValue === 0) {
-                          newPaymentStatus = "pending"
-                        }
-                        setFormData({ 
-                          ...formData, 
-                          receivedAmount: receivedAmount,
-                          paymentStatus: newPaymentStatus,
-                          paymentMethod: "credit",
-                        })
-                      }}
-                      placeholder="Enter received amount for credit..."
-                      className="text-lg"
-                    />
-                    {formData.receivedAmount && (
-                      <div className="text-sm text-gray-600">
-                        {(() => {
-                          const receivedValue = parseFloat(formData.receivedAmount) || 0
-                          const remaining = totalAmount - receivedValue
-                          if (remaining > 0) {
-                            return `Remaining: AED ${remaining.toFixed(2)}`
-                          } else if (remaining < 0) {
-                            return `Excess: AED ${Math.abs(remaining).toFixed(2)}`
-                          } else {
-                            return "✓ Fully paid"
-                          }
-                        })()}
-                      </div>
-                    )}
-                  </div>
-                )}
+                {/* For credit, no received amount input; it is fixed to 0 and status pending */}
 
                 {formData.paymentOption === "delivery_note" && (
                   <div className="space-y-2">
-                    <div className="text-sm text-gray-600">Only item and quantity are required. A delivery note will be generated.</div>
+                  <div className="text-sm text-gray-600">Only item and quantity are required. A delivery note will be generated.</div>
                   </div>
                 )}
               </div>

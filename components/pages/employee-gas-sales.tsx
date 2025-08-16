@@ -343,16 +343,14 @@ export function EmployeeGasSales({ user }: EmployeeGasSalesProps) {
       // Derive final payment fields from paymentOption
       let derivedPaymentMethod = formData.paymentMethod || "cash"
       let derivedPaymentStatus = formData.paymentStatus || "cleared"
-      let derivedReceivedAmount = parseFloat(formData.receivedAmount) || 0
+      let derivedReceivedAmount = 0
 
       if (formData.paymentOption === 'credit') {
         derivedPaymentMethod = 'credit'
         derivedPaymentStatus = 'pending'
-        // keep entered receivedAmount for partial credit payments
       } else if (formData.paymentOption === 'delivery_note') {
         derivedPaymentMethod = 'delivery_note'
         derivedPaymentStatus = 'pending'
-        derivedReceivedAmount = 0
       } else if (formData.paymentOption === 'debit') {
         derivedPaymentMethod = 'debit'
         // status already managed by amount comparison
@@ -763,9 +761,10 @@ const [saleForSignature, setSaleForSignature] = useState<any | null>(null);
                     next.paymentStatus = 'pending'
                     next.paymentMethod = 'delivery_note'
                   } else if (value === 'credit') {
-                    // Keep existing receivedAmount editable for partial credit payments
+                    // For credit, fix receivedAmount to 0 and keep status pending
                     next.paymentMethod = 'credit'
                     next.paymentStatus = 'pending'
+                    next.receivedAmount = '0'
                   } else if (value === 'debit') {
                     next.paymentMethod = 'debit'
                   }
@@ -811,35 +810,7 @@ const [saleForSignature, setSaleForSignature] = useState<any | null>(null);
                 </div>
               )}
 
-              {formData.paymentOption === 'credit' && (
-                <div className="space-y-2">
-                  <Label htmlFor="creditReceived">Credit Received (AED)</Label>
-                  <Input
-                    id="creditReceived"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.receivedAmount}
-                    onChange={(e) => {
-                      const receivedAmount = e.target.value
-                      const receivedValue = parseFloat(receivedAmount) || 0
-                      const totalAmount = calculateTotalAmount()
-                      let newPaymentStatus = formData.paymentStatus
-                      if (receivedValue === totalAmount && totalAmount > 0) newPaymentStatus = 'cleared'
-                      else if (receivedValue > 0 && receivedValue < totalAmount) newPaymentStatus = 'pending'
-                      else if (receivedValue === 0) newPaymentStatus = 'pending'
-                      setFormData({ ...formData, receivedAmount, paymentStatus: newPaymentStatus, paymentMethod: 'credit' })
-                    }}
-                    placeholder="Enter received amount for credit..."
-                    className="text-lg"
-                  />
-                  {formData.receivedAmount && (
-                    <div className="text-sm text-gray-600">
-                      {(() => { const rv = parseFloat(formData.receivedAmount)||0; const rem = calculateTotalAmount() - rv; if(rem>0){return `Remaining: AED ${rem.toFixed(2)}`} else if(rem<0){return `Excess: AED ${Math.abs(rem).toFixed(2)}`} else {return '✓ Fully paid'} })()}
-                    </div>
-                  )}
-                </div>
-              )}
+              {/* For credit, no received amount input; it is fixed to 0 and status pending */}
 
               {formData.paymentOption === 'delivery_note' && (
                 <div className="space-y-2">

@@ -47,6 +47,7 @@ export const salesAPI = {
   getById: (id: string) => api.get(`/sales/${id}`),
   create: (data: any) => api.post("/sales", data),
   update: (id: string, data: any) => api.put(`/sales/${id}`, data),
+  patch: (id: string, data: any) => api.patch(`/sales/${id}`, data),
   delete: (id: string) => api.delete(`/sales/${id}`),
 }
 
