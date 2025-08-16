@@ -68,6 +68,14 @@ interface CylinderTransaction {
   notes: string
   createdAt: string
   securityAmount?: number // Added for optional use
+  // Multi-items
+  items?: Array<{
+    productId: string
+    productName?: string
+    cylinderSize: string
+    quantity: number
+    amount: number
+  }>
 }
 
 // Cylinder size mapping for display
@@ -136,8 +144,68 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
     checkNumber: "",
     status: "pending",
     notes: "",
-    securityAmount: 0 // Added for security deposit
+    securityAmount: 0, // Added for security deposit
+    // Multi-items
+    items: [] as Array<{
+      productId: string
+      productName: string
+      cylinderSize: string
+      quantity: number
+      amount: number
+    }>
   })
+
+  // Helpers for items management (similar to admin page)
+  const getProductById = (id: string) => products.find(p => p._id === id)
+
+  const addItem = () => {
+    const first = products[0]
+    setFormData(prev => ({
+      ...prev,
+      items: [
+        ...prev.items,
+        {
+          productId: first?._id || "",
+          productName: first?.name || "",
+          cylinderSize: "small",
+          quantity: 1,
+          amount: Number((first?.leastPrice || 0).toFixed(2))
+        }
+      ]
+    }))
+  }
+
+  const updateItem = (index: number, field: keyof (typeof formData.items)[number], value: any) => {
+    setFormData(prev => {
+      const items = [...prev.items]
+      const item = { ...items[index] } as any
+      item[field] = value
+      if (field === 'productId') {
+        const p = getProductById(value)
+        item.productName = p?.name || ''
+        if (p) item.amount = Number((p.leastPrice).toFixed(2))
+      }
+      items[index] = item
+      return { ...prev, items }
+    })
+  }
+
+  const removeItem = (index: number) => {
+    setFormData(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== index) }))
+  }
+
+  const totalItemsAmount = () => formData.items.reduce((s, it) => s + (Number(it.amount) || 0), 0)
+  const totalItemsQuantity = () => formData.items.reduce((s, it) => s + (Number(it.quantity) || 0), 0)
+
+  // Assigned availability helper for a specific product and size
+  const getAssignedAvailableFor = (productId: string, size: string) => {
+    const matches = stockAssignments.filter(sa => {
+      const sameProduct = sa?.product?._id === productId
+      const sameSize = sa?.cylinderSize ? sa.cylinderSize === size : true
+      return sameProduct && sameSize
+    })
+    return matches.reduce((sum, sa) => sum + (sa.remainingQuantity || 0), 0)
+  }
 
   useEffect(() => {
     fetchData()
@@ -164,6 +232,13 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
       if (transactionsResponse.ok) {
         const transactionsData = await transactionsResponse.json()
         const transactions = transactionsData.data || transactionsData
+        try {
+          console.log('[EmployeeCylinderSales] fetched transactions:', Array.isArray(transactions) ? transactions.length : 0)
+          if (Array.isArray(transactions)) {
+            const sample = transactions.slice(0, 3).map(t => ({ id: t._id, itemsLen: Array.isArray((t as any).items) ? (t as any).items.length : 0 }))
+            console.log('[EmployeeCylinderSales] sample items lens:', sample)
+          }
+        } catch {}
         setTransactions(Array.isArray(transactions) ? transactions : [])
       } else {
         console.error("Failed to fetch transactions:", transactionsResponse.status)
@@ -251,7 +326,8 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
       checkNumber: "",
       status: "pending",
       notes: "",
-      securityAmount: 0 // Added for security deposit
+      securityAmount: 0, // Added for security deposit
+      items: []
     })
     setCustomerSearch("")
     setShowCustomerSuggestions(false)
@@ -314,7 +390,7 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
       }
 
       // When product changes, auto-fill the amount with least price
-      if (name === 'product') {
+      if (name === 'product' && newState.items.length === 0) {
         const selectedProduct = products.find(p => p._id === value);
         if (selectedProduct) {
           const calculatedAmount = selectedProduct.leastPrice * newState.quantity;
@@ -342,8 +418,8 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
     setFormData((prev) => {
       const newState = { ...prev, [name]: name === 'notes' || name === 'bankName' || name === 'checkNumber' ? value : numericValue };
 
-      // When quantity changes, recalculate amounts based on selected product
-      if (name === 'quantity' && newState.product) {
+      // When quantity changes, recalculate amounts based on selected product (single-item mode only)
+      if (name === 'quantity' && newState.product && newState.items.length === 0) {
         const selectedProduct = products.find(p => p._id === newState.product);
         if (selectedProduct) {
           const calculatedAmount = selectedProduct.leastPrice * numericValue;
@@ -365,10 +441,11 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
         newState.amount = numericValue;
       }
 
-      // Auto-update status based on deposit amount comparison (only for deposit transactions)
+      // Auto-update status based on deposit amount vs total (items-aware)
       if (newState.type === 'deposit' && (name === 'depositAmount' || name === 'amount')) {
         const depositAmt = name === 'depositAmount' ? numericValue : newState.depositAmount;
-        const totalAmt = name === 'amount' ? numericValue : newState.amount;
+        const baseTotal = newState.items.length > 0 ? totalItemsAmount() : newState.amount;
+        const totalAmt = name === 'amount' && newState.items.length === 0 ? numericValue : baseTotal;
         
         if (depositAmt >= totalAmt && totalAmt > 0) {
           newState.status = 'cleared';
@@ -390,44 +467,65 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
         toast.error("Please fill in all required fields")
         return
       }
-    } else if (!formData.customer || !formData.product || !formData.cylinderSize || formData.quantity <= 0) {
+    } else if (!formData.customer || (formData.items.length === 0 && (!formData.product || !formData.cylinderSize || formData.quantity <= 0))) {
       toast.error("Please fill in all required fields")
       return
     }
 
     // Get selected product for validation
-    const selectedProduct = products.find(p => p._id === formData.product)
-    if (!selectedProduct) {
-      toast.error("Please select a valid product")
-      return
+    const selectedProduct = formData.items.length === 0 ? products.find(p => p._id === formData.product) : null
+    if (formData.items.length === 0) {
+      if (!selectedProduct) {
+        toast.error("Please select a valid product")
+        return
+      }
     }
 
-    // Validate against assigned stock for this product and cylinder size
-    const assignedAvailable = getAssignedAvailable()
-    if (assignedAvailable < formData.quantity) {
-      setStockAlert({
-        open: true,
-        productName: selectedProduct.name,
-        size: formData.cylinderSize,
-        available: assignedAvailable,
-        requested: formData.quantity,
-      })
-      setStockValidationMessage(`You requested ${formData.quantity} unit(s) of ${selectedProduct.name} (${formData.cylinderSize}). Only ${assignedAvailable} unit(s) are available in your assigned inventory.`)
-      setShowStockValidationPopup(true)
-      return
+    // Validate against assigned stock
+    if (formData.items.length === 0) {
+      const assignedAvailable = getAssignedAvailable()
+      if (assignedAvailable < formData.quantity) {
+        setStockAlert({
+          open: true,
+          productName: selectedProduct!.name,
+          size: formData.cylinderSize,
+          available: assignedAvailable,
+          requested: formData.quantity,
+        })
+        setStockValidationMessage(`You requested ${formData.quantity} unit(s) of ${selectedProduct!.name} (${formData.cylinderSize}). Only ${assignedAvailable} unit(s) are available in your assigned inventory.`)
+        setShowStockValidationPopup(true)
+        return
+      }
+    } else {
+      // Multi-item validation per item
+      for (const it of formData.items) {
+        const available = getAssignedAvailableFor(it.productId, it.cylinderSize)
+        if (available < (Number(it.quantity) || 0)) {
+          setStockAlert({
+            open: true,
+            productName: it.productName,
+            size: it.cylinderSize,
+            available,
+            requested: it.quantity,
+          })
+          setStockValidationMessage(`You requested ${it.quantity} unit(s) of ${it.productName} (${it.cylinderSize}). Only ${available} unit(s) are available in your assigned inventory.`)
+          setShowStockValidationPopup(true)
+          return
+        }
+      }
     }
 
     // Calculate amount based on least price and quantity
-    const calculatedAmount = selectedProduct.leastPrice * formData.quantity
+    const calculatedAmount = formData.items.length > 0 ? totalItemsAmount() : (selectedProduct ? selectedProduct.leastPrice * formData.quantity : 0)
 
     try {
       const transactionData: any = {
         employeeId: user.id,
         type: formData.type,
         // party is conditional below
-        product: formData.product,
-        cylinderSize: formData.cylinderSize,
-        quantity: formData.quantity,
+        product: formData.items.length === 0 ? formData.product : (formData.items[0]?.productId || ''),
+        cylinderSize: formData.items.length === 0 ? formData.cylinderSize : (formData.items[0]?.cylinderSize || ''),
+        quantity: formData.items.length === 0 ? formData.quantity : totalItemsQuantity(),
         amount: calculatedAmount,
         depositAmount:
           formData.type === 'deposit'
@@ -438,6 +536,16 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
         status: formData.paymentOption === 'delivery_note' ? 'pending' : formData.status,
         notes: formData.notes,
         paymentOption: formData.paymentOption,
+      }
+
+      if (formData.items.length > 0) {
+        transactionData.items = formData.items.map(it => ({
+          productId: it.productId,
+          productName: it.productName,
+          cylinderSize: it.cylinderSize,
+          quantity: Number(it.quantity) || 0,
+          amount: Number(it.amount) || 0,
+        }))
       }
 
       if (formData.type === 'refill') {
@@ -494,9 +602,9 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
       type: transaction.type,
       customer: (transaction as any).customer?._id || '',
       supplier: (transaction as any).supplier?._id || '',
-      product: transaction.product?._id || '',
-      cylinderSize: transaction.cylinderSize,
-      quantity: transaction.quantity,
+      product: (transaction.items && transaction.items.length > 0) ? (transaction.items[0].productId || '') : (transaction.product?._id || ''),
+      cylinderSize: (transaction.items && transaction.items.length > 0) ? transaction.items[0].cylinderSize : transaction.cylinderSize,
+      quantity: (transaction.items && transaction.items.length > 0) ? transaction.items[0].quantity : transaction.quantity,
       amount: transaction.amount,
       depositAmount: transaction.depositAmount || 0,
       refillAmount: transaction.refillAmount || 0,
@@ -508,7 +616,14 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
       checkNumber: transaction.checkNumber || '',
       status: transaction.status,
       notes: transaction.notes || '',
-      securityAmount: transaction.securityAmount || 0
+      securityAmount: transaction.securityAmount || 0,
+      items: (transaction.items && transaction.items.length > 0) ? transaction.items.map(it => ({
+        productId: (it as any).productId || '',
+        productName: it.productName || '',
+        cylinderSize: it.cylinderSize,
+        quantity: it.quantity,
+        amount: it.amount,
+      })) : []
     })
     setCustomerSearch(transaction.customer?.name || '')
     setEditingTransactionId(transaction._id)
@@ -554,15 +669,22 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
           address: transaction.customer?.address || 'N/A',
         }
 
+    const isMulti = Array.isArray((transaction as any).items) && (transaction as any).items.length > 0
     const transactionWithAddress = {
       ...transaction,
       invoiceNumber: `CYL-${transaction._id.slice(-6).toUpperCase()}`,
       category: "cylinder",
-      items: transaction.product ? [{
-        product: transaction.product,
-        quantity: transaction.quantity,
-        price: transaction.amount / transaction.quantity
-      }] : [],
+      items: isMulti
+        ? (transaction as any).items.map((it: any) => ({
+            product: { name: it.productName || it.productId?.name || (transaction as any).product?.name || 'Cylinder' },
+            quantity: it.quantity,
+            price: it.amount / Math.max(it.quantity, 1)
+          }))
+        : (transaction.product ? [{
+            product: transaction.product,
+            quantity: transaction.quantity,
+            price: transaction.amount / Math.max(transaction.quantity, 1)
+          }] : []),
       totalAmount: transaction.amount,
       receivedAmount: transaction.amount,
       customer: party,
@@ -656,7 +778,7 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
       type: 'Type',
       customer: 'Customer / Supplier',
       product: 'Product',
-      cylinderSize: 'Cylinder Size',
+      cylinderSize: 'Items / Cylinder Size',
       quantity: 'Quantity',
       amount: 'Amount (AED)',
       depositAmount: 'Deposit Amount (AED)',
@@ -714,25 +836,63 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
           )}
         </TableCell>
       ),
-      product: () => (
-        <TableCell className="p-4">
-          {transaction.product ? transaction.product.name : 'N/A'}
-        </TableCell>
-      ),
-      cylinderSize: () => (
-        <TableCell className="p-4">
-          {transaction.cylinderSize}
-        </TableCell>
-      ),
-      quantity: () => (
-        <TableCell className="p-4">
-          {transaction.quantity}
-        </TableCell>
-      ),
+      product: () => {
+        const items = (transaction as any).items as any[] | undefined
+        const productName = transaction.product?.name || 'N/A'
+        if (items && items.length > 0) {
+          const tooltip = items
+            .map((it: any) => `${it.productName || it.productId?.name || 'Item'} x${it.quantity} - AED ${Number(it.amount||0).toFixed(2)}`)
+            .join('\n')
+          return (
+            <TableCell className="p-4">
+              <div className="font-medium" title={tooltip}>
+                {`${items.length} item${items.length > 1 ? 's' : ''}`}
+              </div>
+            </TableCell>
+          )
+        }
+        return (
+          <TableCell className="p-4">{productName}</TableCell>
+        )
+      },
+      cylinderSize: () => {
+        const items = (transaction as any).items as any[] | undefined
+        if (items && items.length > 0) {
+          return (
+            <TableCell className="p-4">
+              <div className="text-sm space-y-1">
+                {items.map((it, idx) => {
+                  const fallbackName = products.find(p => p._id === (typeof it.productId === 'string' ? it.productId : it.productId?._id))?.name
+                  const name = it.productName || it.productId?.name || fallbackName || 'Product'
+                  const fallbackProduct = products.find(p => p._id === (typeof it.productId === 'string' ? it.productId : it.productId?._id))
+                  const sizeKey = it.cylinderSize || fallbackProduct?.cylinderType
+                  const size = sizeKey ? (CYLINDER_SIZE_MAPPING as any)[sizeKey] || sizeKey : '-'
+                  return (
+                    <div key={idx} className="flex items-center gap-2">
+                      <span className="font-medium text-gray-800">{name}</span>
+                      <span className="text-gray-500">({size})</span>
+                      <span className="text-gray-600">x {it.quantity}</span>
+                      <span className="text-gray-700">- AED {Number(it.amount||0).toFixed(2)}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </TableCell>
+          )
+        }
+        return (
+          <TableCell className="p-4">{transaction.cylinderSize}</TableCell>
+        )
+      },
+      quantity: () => {
+        const items = (transaction as any).items as any[] | undefined
+        const totalQty = items && items.length > 0 ? items.reduce((s, it) => s + (Number(it.quantity) || 0), 0) : transaction.quantity
+        return (
+          <TableCell className="p-4">{totalQty}</TableCell>
+        )
+      },
       amount: () => (
-        <TableCell className="p-4">
-          AED {transaction.amount.toFixed(2)}
-        </TableCell>
+        <TableCell className="p-4">AED {Number(transaction.amount || 0).toFixed(2)}</TableCell>
       ),
       depositAmount: () => (
         <TableCell className="p-4">
@@ -978,69 +1138,133 @@ export function EmployeeCylinderSales({ user }: EmployeeCylinderSalesProps) {
       </div>
     )}
 
-    {/* Product */}
-    <div>
-      <Label htmlFor="product">Product</Label>
-      <Select name="product" value={formData.product} onValueChange={(value) => handleSelectChange("product", value)}>
-        <SelectTrigger>
-          <SelectValue placeholder="Select a product" />
-        </SelectTrigger>
-        <SelectContent>
-          {products.map((product) => (
-            <SelectItem key={product._id} value={product._id}>
-              {product.name} - AED {product.leastPrice.toFixed(2)}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      {getSelectedProduct() && (
-        <p className="text-sm text-gray-500 mt-1">
-          Price: AED {getSelectedProduct()!.leastPrice.toFixed(2)} per unit
-        </p>
-      )}
-      <p className="text-xs text-gray-500 mt-1">Assigned available: {getAssignedAvailable()}</p>
-    </div>
-
-    {/* Cylinder Size */}
-    <div>
-      <Label htmlFor="cylinderSize">Cylinder Size</Label>
-      <Select value={formData.cylinderSize} onValueChange={(value) => handleSelectChange("cylinderSize", value)}>
-        <SelectTrigger>
-          <SelectValue placeholder="Select size" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="small">Small (5kg)</SelectItem>
-          <SelectItem value="large">Large (45kg)</SelectItem>
-        </SelectContent>
-      </Select>
-    </div>
-
-    {/* Quantity */}
-    <div>
-      <Label htmlFor="quantity">Quantity</Label>
-      <Input
-        id="quantity"
-        name="quantity"
-        type="number"
-        value={formData.quantity}
-        onChange={handleChange}
-        className="w-full"
-      />
-    </div>
-
-    {/* Amount - only for deposit */}
-    {formData.type === 'deposit' && (
-      <div>
-        <Label htmlFor="amount">Amount</Label>
-        <Input
-          id="amount"
-          name="amount"
-          type="number"
-          value={formData.amount}
-          onChange={handleChange}
-          className="w-full"
-        />
+    {/* Items Section Toggle */}
+    <div className="md:col-span-2 flex items-center justify-between">
+      <div className="text-sm text-gray-600">
+        {formData.items.length > 0 ? `Items in this transaction: ${formData.items.length}` : 'Single item mode'}
       </div>
+      <Button type="button" variant="outline" onClick={addItem} className="h-8">
+        Add Item
+      </Button>
+    </div>
+
+    {/* Multi-Item UI or Single-Item Fields */}
+    {formData.items.length > 0 ? (
+      <div className="md:col-span-2 space-y-3">
+        {formData.items.map((it, idx) => (
+          <div key={idx} className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end border p-3 rounded-lg">
+            <div>
+              <Label>Product</Label>
+              <Select value={it.productId} onValueChange={(val) => updateItem(idx, 'productId', val)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select product" />
+                </SelectTrigger>
+                <SelectContent>
+                  {products.map(p => (
+                    <SelectItem key={p._id} value={p._id}>{p.name} - AED {p.leastPrice.toFixed(2)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Cylinder Size</Label>
+              <Select value={it.cylinderSize} onValueChange={(val) => updateItem(idx, 'cylinderSize', val)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select size" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="small">Small (5kg)</SelectItem>
+                  <SelectItem value="large">Large (45kg)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Quantity</Label>
+              <Input type="number" value={it.quantity} onChange={(e) => updateItem(idx, 'quantity' as any, parseFloat(e.target.value) || 0)} />
+            </div>
+            <div>
+              <Label>Amount (AED)</Label>
+              <Input type="number" value={it.amount} onChange={(e) => updateItem(idx, 'amount' as any, parseFloat(e.target.value) || 0)} />
+            </div>
+            <div className="flex justify-end">
+              <Button type="button" variant="destructive" onClick={() => removeItem(idx)} className="h-8">
+                Remove
+              </Button>
+            </div>
+          </div>
+        ))}
+        <div className="flex items-center justify-between text-sm text-gray-700">
+          <div>Total Quantity: <span className="font-semibold">{totalItemsQuantity()}</span></div>
+          <div>Total Amount: <span className="font-semibold">AED {totalItemsAmount().toFixed(2)}</span></div>
+        </div>
+      </div>
+    ) : (
+      <>
+        {/* Product */}
+        <div>
+          <Label htmlFor="product">Product</Label>
+          <Select name="product" value={formData.product} onValueChange={(value) => handleSelectChange("product", value)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select a product" />
+            </SelectTrigger>
+            <SelectContent>
+              {products.map((product) => (
+                <SelectItem key={product._id} value={product._id}>
+                  {product.name} - AED {product.leastPrice.toFixed(2)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {getSelectedProduct() && (
+            <p className="text-sm text-gray-500 mt-1">
+              Price: AED {getSelectedProduct()!.leastPrice.toFixed(2)} per unit
+            </p>
+          )}
+          <p className="text-xs text-gray-500 mt-1">Assigned available: {getAssignedAvailable()}</p>
+        </div>
+
+        {/* Cylinder Size */}
+        <div>
+          <Label htmlFor="cylinderSize">Cylinder Size</Label>
+          <Select value={formData.cylinderSize} onValueChange={(value) => handleSelectChange("cylinderSize", value)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select size" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="small">Small (5kg)</SelectItem>
+              <SelectItem value="large">Large (45kg)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Quantity */}
+        <div>
+          <Label htmlFor="quantity">Quantity</Label>
+          <Input
+            id="quantity"
+            name="quantity"
+            type="number"
+            value={formData.quantity}
+            onChange={handleChange}
+            className="w-full"
+          />
+        </div>
+
+        {/* Amount - only for deposit */}
+        {formData.type === 'deposit' && (
+          <div>
+            <Label htmlFor="amount">Amount</Label>
+            <Input
+              id="amount"
+              name="amount"
+              type="number"
+              value={formData.amount}
+              onChange={handleChange}
+              className="w-full"
+            />
+          </div>
+        )}
+      </>
     )}
 
     {/* Received Via - for deposit and return (Payment Option hidden) */}
