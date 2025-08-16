@@ -349,9 +349,10 @@ export function Inventory() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              {/* Desktop Table View */}
-              <div className="hidden lg:block overflow-x-auto">
-                <Table>
+              {/* Table View (all screens) with horizontal scroll on small viewports */}
+              <div className="w-full overflow-x-auto">
+                <div className="inline-block min-w-[900px] align-top">
+                  <Table>
                   <TableHeader>
                     <TableRow className="bg-gray-50 border-b-2 border-gray-200">
                       <TableHead className="font-bold text-gray-700 p-4">PO Number</TableHead>
@@ -413,73 +414,6 @@ export function Inventory() {
                   </TableBody>
                 </Table>
               </div>
-
-              {/* Mobile Card View */}
-              <div className="lg:hidden">
-                {filteredPending.length > 0 ? (
-                  <div className="divide-y divide-gray-200">
-                    {filteredPending.map((item) => (
-                      <div key={item.id} className="p-4 sm:p-6 hover:bg-gray-50 transition-colors">
-                        <div className="space-y-3">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h3 className="font-semibold text-[#2B3068] text-base sm:text-lg">{item.poNumber}</h3>
-                              <p className="text-sm text-gray-600">{item.productName}</p>
-                            </div>
-                            <Badge variant={item.purchaseType === "gas" ? "default" : "secondary"}>
-                              {item.purchaseType}
-                            </Badge>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 text-sm">
-                            <div>
-                              <span className="font-medium text-gray-700">Supplier:</span>
-                              <span className="ml-2 text-gray-600">{item.supplierName}</span>
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-700">Quantity:</span>
-                              <span className="ml-2 text-gray-600">{item.quantity}</span>
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-700">Unit Price:</span>
-                              <span className="ml-2 text-gray-600">AED {item.unitPrice.toFixed(2)}</span>
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-700">Total:</span>
-                              <span className="ml-2 font-semibold text-[#2B3068]">AED {item.totalAmount.toFixed(2)}</span>
-                            </div>
-                          </div>
-                          <div className="flex flex-col sm:flex-row gap-2 pt-2">
-                            <Button
-                              size="sm"
-                              onClick={() => handleReceiveInventory(item.id)}
-                              style={{ backgroundColor: "#2B3068" }}
-                              className="w-full sm:w-auto hover:opacity-90 text-white min-h-[44px]"
-                            >
-                              Mark Received
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              style={{ borderColor: "#2B3068", color: "#2B3068" }}
-                              className="w-full sm:w-auto hover:bg-slate-50 min-h-[44px]"
-                              onClick={() => handleEditInventory(item)}
-                            >
-                              Edit
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-12 px-4">
-                    <div className="text-gray-500">
-                      <Package className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-4 opacity-50" />
-                      <p className="text-base sm:text-lg font-medium">No pending orders</p>
-                      <p className="text-sm">All orders have been received</p>
-                    </div>
-                  </div>
-                )}
               </div>
             </CardContent>
           </Card>
@@ -503,9 +437,9 @@ export function Inventory() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              {/* Desktop Table View */}
-              <div className="hidden lg:block overflow-x-auto">
-                <Table>
+              <div className="w-full overflow-x-auto">
+                <div className="inline-block min-w-[1000px] align-top">
+                  <Table>
                   <TableHeader>
                     <TableRow className="bg-gray-50 border-b-2 border-gray-200">
                       <TableHead className="font-bold text-gray-700 p-4">PO Number</TableHead>
@@ -570,74 +504,6 @@ export function Inventory() {
                   </TableBody>
                 </Table>
               </div>
-
-              {/* Mobile Card View */}
-              <div className="lg:hidden">
-                {filteredReceived.length > 0 ? (
-                  <div className="divide-y divide-gray-200">
-                    {filteredReceived.map((item) => (
-                      <div key={item.id} className="p-4 sm:p-6 hover:bg-gray-50 transition-colors">
-                        <div className="space-y-3">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h3 className="font-semibold text-[#2B3068] text-base sm:text-lg">{item.poNumber}</h3>
-                              <p className="text-sm text-gray-600">{item.productName}</p>
-                            </div>
-                            <Badge variant={item.purchaseType === "gas" ? "default" : "secondary"}>
-                              {item.purchaseType}
-                            </Badge>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 text-sm">
-                            <div>
-                              <span className="font-medium text-gray-700">Supplier:</span>
-                              <span className="ml-2 text-gray-600">{item.supplierName}</span>
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-700">Quantity:</span>
-                              <span className="ml-2 text-gray-600">{item.quantity}</span>
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-700">Unit Price:</span>
-                              <span className="ml-2 text-gray-600">AED {item.unitPrice.toFixed(2)}</span>
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-700">Total:</span>
-                              <span className="ml-2 font-semibold text-[#2B3068]">AED {item.totalAmount.toFixed(2)}</span>
-                            </div>
-                          </div>
-                          <div className="flex flex-col sm:flex-row gap-2 pt-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              style={{ borderColor: "#2B3068", color: "#2B3068" }}
-                              className="w-full sm:w-auto hover:bg-slate-50 min-h-[44px]"
-                              onClick={() => handleEditInventory(item)}
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              style={{ borderColor: "#dc2626", color: "#dc2626" }}
-                              className="w-full sm:w-auto hover:bg-red-50 min-h-[44px]"
-                              onClick={() => openDeleteDialog(item)}
-                            >
-                              Delete
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-12 px-4">
-                    <div className="text-gray-500">
-                      <Package className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-4 opacity-50" />
-                      <p className="text-base sm:text-lg font-medium">No received items</p>
-                      <p className="text-sm">All items are pending</p>
-                    </div>
-                  </div>
-                )}
               </div>
             </CardContent>
           </Card>
