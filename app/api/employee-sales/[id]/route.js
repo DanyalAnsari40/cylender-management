@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import dbConnect from "@/lib/mongodb"
 import EmployeeSale from "@/models/EmployeeSale"
+import Product from "@/models/Product"
 
 // PUT /api/employee-sales/[id]
 // Aligns with POST schema: items[], totalAmount, paymentMethod, paymentStatus, receivedAmount, notes, customer
@@ -59,5 +60,44 @@ export async function PUT(request, { params }) {
   } catch (error) {
     console.error("Error updating employee sale:", error)
     return NextResponse.json({ error: "Failed to update employee sale" }, { status: 500 })
+  }
+}
+
+// DELETE /api/employee-sales/[id]
+export async function DELETE(request, { params }) {
+  try {
+    await dbConnect()
+
+    const { id } = params
+
+    // Load sale with populated items to get product ids
+    const sale = await EmployeeSale.findById(id).populate('items.product')
+    if (!sale) {
+      return NextResponse.json({ error: "Employee sale not found" }, { status: 404 })
+    }
+
+    // Restore product stock
+    try {
+      for (const item of sale.items) {
+        if (item.product && item.product._id) {
+          const productId = item.product._id
+          const current = await Product.findById(productId)
+          if (current) {
+            const newStock = current.currentStock + item.quantity
+            await Product.findByIdAndUpdate(productId, { currentStock: newStock })
+            console.log(`✅ Restored ${item.product.name} stock from ${current.currentStock} to ${newStock} (returned ${item.quantity} units)`) 
+          }
+        }
+      }
+    } catch (stockErr) {
+      console.error('Failed to restore product stock for employee sale deletion:', stockErr)
+      // Continue deletion even if stock restoration fails
+    }
+
+    await EmployeeSale.findByIdAndDelete(id)
+    return NextResponse.json({ message: 'Employee sale deleted successfully' })
+  } catch (error) {
+    console.error('Error deleting employee sale:', error)
+    return NextResponse.json({ error: 'Failed to delete employee sale' }, { status: 500 })
   }
 }

@@ -563,6 +563,26 @@ const [saleForSignature, setSaleForSignature] = useState<any | null>(null);
         </CardContent>
       </Card>
 
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Sale</DialogTitle>
+            <DialogDescription>
+              {saleToDelete ? `Are you sure you want to delete invoice ${saleToDelete.invoiceNumber}? This action will restore product stock for the items in this sale.` : "Are you sure you want to delete this sale?"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" type="button" onClick={() => setIsDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" type="button" onClick={handleDeleteConfirm}>
+              Confirm Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Create / Edit Sale Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
